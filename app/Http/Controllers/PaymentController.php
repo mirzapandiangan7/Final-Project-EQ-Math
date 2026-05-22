@@ -164,4 +164,24 @@ class PaymentController extends Controller
 
         return response()->json(['status' => 'success']);
     }
+
+    public function cancelPayment($id)
+    {
+        $userId = Auth::id();
+        
+        // Cari transaksi berdasarkan ID dan pastikan milik user yang login
+        $transaksi = TransaksiPembayaran::where('id', $id)
+            ->where('user_id', $userId)
+            ->where('status_pembayaran', 'pending')
+            ->firstOrFail();
+
+        // Ubah status menjadi 'cancel'
+        $transaksi->status_pembayaran = 'cancel';
+        $transaksi->save();
+
+        return redirect()->route('siswa.dashboard')->with([
+            'message' => 'Pembayaran berhasil dibatalkan.',
+            'message_type' => 'success'
+        ]);
+    }
 }

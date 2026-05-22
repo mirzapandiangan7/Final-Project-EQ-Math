@@ -88,6 +88,10 @@
                         <i class="fas fa-lock mr-2"></i> Lanjutkan Pembayaran
                     </button>
                 </form>
+
+                <a href="{{ url()->previous() }}" class="mt-3 w-full flex items-center justify-center border-2 border-slate-200 text-slate-600 bg-white py-4 rounded-xl hover:bg-slate-50 transition font-semibold text-lg">
+                    <i class="fas fa-arrow-left mr-2"></i> Kembali
+                </a>
             @endif
         </div>
     </div>
@@ -132,13 +136,21 @@
                             <i class="fas fa-info-circle mr-1"></i>
                             Pembayaran akan segera diproses setelah dikonfirmasi
                         </p>
-                        <form action="{{ url('siswa/payment/process') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="jadwal_id" value="{{ $tagihan->jadwal_id }}">
-                            <button type="submit" class="px-6 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition font-medium">
-                                <i class="fas fa-credit-card mr-2"></i> Bayar Sekarang
-                            </button>
-                        </form>
+                        <div class="flex items-center space-x-3">
+                            <form action="{{ route('siswa.payment.cancel', $tagihan->id) }}" method="POST" onsubmit="return confirm('Yakin ingin membatalkan pendaftaran kelas ini?')">
+                                @csrf
+                                <button type="submit" class="px-6 py-2.5 border-2 border-slate-300 text-slate-600 rounded-xl hover:bg-slate-100 transition font-medium">
+                                    Batalkan
+                                </button>
+                            </form>
+                            <form action="{{ url('siswa/payment/process') }}" method="POST">
+                                @csrf
+                                <input type="hidden" name="jadwal_id" value="{{ $tagihan->jadwal_id }}">
+                                <button type="submit" class="px-6 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition font-medium">
+                                    <i class="fas fa-credit-card mr-2"></i> Bayar Sekarang
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             @endforeach

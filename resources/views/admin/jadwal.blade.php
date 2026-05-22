@@ -34,7 +34,7 @@
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-sm font-medium text-slate-500">Jadwal Aktif</p>
-                <p class="text-3xl font-bold text-slate-900 mt-2">{{ $jadwal->where('status', 'active')->count() }}</p>
+                <p class="text-3xl font-bold text-slate-900 mt-2">{{ $jadwal->filter(fn($j) => $j->status_jadwal === 'active')->count() }}</p>
             </div>
             <div class="w-12 h-12 bg-green-100 text-green-600 rounded-xl flex items-center justify-center">
                 <i class="fas fa-check-circle text-xl"></i>
@@ -46,7 +46,7 @@
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-sm font-medium text-slate-500">Akan Datang</p>
-                <p class="text-3xl font-bold text-slate-900 mt-2">{{ $jadwal->where('status', 'upcoming')->count() }}</p>
+                <p class="text-3xl font-bold text-slate-900 mt-2">{{ $jadwal->filter(fn($j) => $j->status_jadwal === 'upcoming')->count() }}</p>
             </div>
             <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
                 <i class="fas fa-clock text-xl"></i>
@@ -97,7 +97,8 @@
                         </td>
                         <td class="py-4 px-6">
                             @php
-                                $badgeClass = match($j->status) {
+                                $itemStatus = $j->status_jadwal;
+                                $badgeClass = match($itemStatus) {
                                     'active' => 'badge-success',
                                     'upcoming' => 'badge-info',
                                     'completed' => 'badge-warning',
@@ -105,7 +106,7 @@
                                 };
                             @endphp
                             <span class="badge {{ $badgeClass }}">
-                                {{ ucfirst($j->status) }}
+                                {{ ucfirst($itemStatus) }}
                             </span>
                         </td>
                         <td class="py-4 px-6">

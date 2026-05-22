@@ -32,6 +32,7 @@ Route::middleware(['auth', 'role:siswa', 'autocutoff'])->prefix('siswa')->name('
     Route::get('pendaftaran', [SiswaController::class, 'pendaftaran'])->name('pendaftaran');
     Route::get('checkout/{id}', [PaymentController::class, 'checkout'])->name('checkout');
     Route::post('payment/process', [PaymentController::class, 'process'])->name('payment.process');
+    Route::post('payment/cancel/{id}', [PaymentController::class, 'cancelPayment'])->name('payment.cancel');
     Route::get('riwayat', [SiswaController::class, 'riwayat'])->name('riwayat');
     Route::get('kelas-saya', [SiswaController::class, 'kelasSaya'])->name('kelas_saya');
     Route::get('bantuan', [SiswaController::class, 'bantuan'])->name('bantuan');
