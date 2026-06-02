@@ -16,6 +16,8 @@ use App\Exports\AdminPengajarExport;
 use App\Exports\AdminJadwalExport;
 use App\Exports\AdminSiswaExport;
 use App\Exports\AdminKelasExport;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class AdminController extends Controller
 {
@@ -24,7 +26,7 @@ class AdminController extends Controller
         $totalSiswa = User::where('role', 'siswa')->count();
         $totalPengajar = MasterPengajar::count();
         $totalKelas = MasterKelas::count();
-        
+
         $pendapatanBulanIni = TransaksiPembayaran::where('status_pembayaran', 'settlement')
             ->whereMonth('tanggal_bayar', now()->month)
             ->whereYear('tanggal_bayar', now()->year)
@@ -40,13 +42,72 @@ class AdminController extends Controller
             ->take(5)
             ->get();
 
+        // === DATA CHART ===
+
+        // 1. Grafik Pendapatan Bulanan (Line Chart)
+        $currentYear = now()->year;
+        $monthlyRevenueLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        $monthlyRevenueData = array_fill(0, 12, 0); // Initialize dengan 0
+
+        // Ambil transaksi settlement di tahun berjalan
+        $monthlyTransactions = TransaksiPembayaran::where('status_pembayaran', 'settlement')
+            ->whereYear('tanggal_bayar', $currentYear)
+            ->whereNotNull('tanggal_bayar')
+            ->get();
+
+        // Group data per bulan menggunakan Collection
+        $monthlyRevenueCollection = $monthlyTransactions->groupBy(function($item) {
+            return Carbon::parse($item->tanggal_bayar)->month; // 1-12
+        })->map(function($group) {
+            return $group->sum('jumlah_bayar');
+        });
+
+        // Fill data ke array (bulan 1-12 ke index 0-11)
+        foreach ($monthlyRevenueCollection as $month => $total) {
+            if ($month >= 1 && $month <= 12) {
+                $monthlyRevenueData[$month - 1] = $total;
+            }
+        }
+
+        // 2. Grafik Status Pembayaran (Doughnut Chart)
+        $paymentStatusLabels = ['Pending', 'Settlement', 'Cancel', 'Expire'];
+        $paymentStatusData = [
+            TransaksiPembayaran::where('status_pembayaran', 'pending')->count(),
+            TransaksiPembayaran::where('status_pembayaran', 'settlement')->count(),
+            TransaksiPembayaran::where('status_pembayaran', 'cancel')->count(),
+            TransaksiPembayaran::where('status_pembayaran', 'expire')->count(),
+        ];
+
+        // 3. Grafik Pendapatan per Kelas (Bar Chart)
+        // Ambil transaksi settlement dengan relasi lengkap
+        $revenueByClassTransactions = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
+            ->where('status_pembayaran', 'settlement')
+            ->whereHas('jadwalKelas.masterKelas') // Pastikan relasi ada
+            ->get();
+
+        // Group dan sum per nama_kelas
+        $revenueByClassCollection = $revenueByClassTransactions->groupBy(function($item) {
+            return $item->jadwalKelas->masterKelas->nama_kelas ?? 'Tidak diketahui';
+        })->map(function($group) {
+            return $group->sum('jumlah_bayar');
+        })->sortDesc()->take(10); // Top 10 kelas
+
+        $revenueByClassLabels = $revenueByClassCollection->keys()->toArray();
+        $revenueByClassData = $revenueByClassCollection->values()->toArray();
+
         return view('admin.dashboard', compact(
-            'totalSiswa', 
-            'totalPengajar', 
-            'totalKelas', 
+            'totalSiswa',
+            'totalPengajar',
+            'totalKelas',
             'pendapatanBulanIni',
             'siswaBaru',
-            'transaksiTerbaru'
+            'transaksiTerbaru',
+            'monthlyRevenueLabels',
+            'monthlyRevenueData',
+            'paymentStatusLabels',
+            'paymentStatusData',
+            'revenueByClassLabels',
+            'revenueByClassData'
         ));
     }
 
