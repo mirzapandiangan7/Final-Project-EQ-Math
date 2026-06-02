@@ -120,7 +120,7 @@
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-bold text-slate-900">Tagihan Belum Dibayar</h2>
                 @if(isset($pembayaranPending) && count($pembayaranPending) > 0)
-                    <a href="{{ route('siswa.pendaftaran') }}" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                    <a href="{{ route('siswa.checkout') }}" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
                         Lihat Semua <i class="fas fa-arrow-right ml-1"></i>
                     </a>
                 @endif
@@ -147,7 +147,7 @@
                             </div>
                             <div class="text-right">
                                 <p class="font-bold text-amber-600">Rp {{ number_format($tagihan->jumlah_bayar, 0, ',', '.') }}</p>
-                                <a href="{{ route('siswa.pendaftaran') }}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">Bayar</a>
+                                <a href="{{ route('siswa.checkout') }}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">Bayar</a>
                             </div>
                         </div>
                     @endforeach

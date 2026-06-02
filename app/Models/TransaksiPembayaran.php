@@ -17,6 +17,7 @@ class TransaksiPembayaran extends Model
         'jadwal_id',
         'tanggal_bayar',
         'jumlah_bayar',
+        'snap_token',
         'status_pembayaran',
     ];
 

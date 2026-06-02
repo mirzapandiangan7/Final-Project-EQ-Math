@@ -1,14 +1,19 @@
-@extends('layouts.app')
+@extends('layouts.panel')
 
 @section('title', 'Pembayaran')
 
 @section('content')
-<!-- Page Header -->
+<!-- ==========================================================================
+     PAGE HEADER
+     ========================================================================== -->
 <div class="mb-8 fade-in">
     <h1 class="text-3xl font-bold text-slate-900">Pembayaran</h1>
     <p class="text-slate-500 mt-1">Selesaikan pembayaran untuk mengaktifkan kelas</p>
 </div>
 
+<!-- ==========================================================================
+     FLASH MESSAGES (Success/Error)
+     ========================================================================== -->
 @if(session('message'))
 <div class="border-l-4 p-4 mb-4 rounded-lg {{ session('message_type') === 'error' ? 'bg-red-100 border-red-500 text-red-700' : 'bg-green-100 border-green-500 text-green-700' }} flex items-center">
     <i class="fas {{ session('message_type') === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle' }} mr-3"></i>
@@ -16,8 +21,10 @@
 </div>
 @endif
 
+<!-- ==========================================================================
+     NEW REGISTRATION SECTION
+     ========================================================================== -->
 @if ($kelasInfo)
-    <!-- New Registration Payment -->
     <div class="bg-white rounded-2xl shadow-sm p-6 mb-8 border border-slate-200">
         <div class="flex items-center justify-between mb-6">
             <div>
@@ -27,6 +34,7 @@
         </div>
 
         <div class="border border-slate-200 rounded-xl p-6">
+            <!-- Detail Kelas -->
             <div class="flex items-center space-x-4 mb-6">
                 <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white">
                     <i class="fas fa-calculator text-2xl"></i>
@@ -37,6 +45,7 @@
                 </div>
             </div>
 
+            <!-- Rincian Biaya -->
             <div class="bg-slate-50 rounded-xl p-4 mb-6">
                 <div class="space-y-3">
                     <div class="flex justify-between">
@@ -64,6 +73,7 @@
                     </p>
                 </div>
             @else
+                <!-- Pilihan Jadwal (Radio) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                     @foreach ($jadwalList as $jadwal)
                         <label class="border-2 border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-600 transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
@@ -81,10 +91,11 @@
                     @endforeach
                 </div>
 
-                <form id="form-daftar-baru" action="{{ url('siswa/payment/process') }}" method="POST">
+                <!-- Form Pendaftaran Baru (AJAX) -->
+                <form id="form-daftar-baru" onsubmit="handlePayment(event, this)">
                     @csrf
-                    <input type="hidden" name="kelas_id" value="{{ $kelasInfo->id }}">
-                    <button type="button" id="btn-daftar-baru" class="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 transition font-semibold text-lg">
+                    <input type="hidden" name="jadwal_id" id="selected_jadwal_id">
+                    <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 transition font-semibold text-lg">
                         <i class="fas fa-lock mr-2"></i> Lanjutkan Pembayaran
                     </button>
                 </form>
@@ -97,7 +108,9 @@
     </div>
 @endif
 
-<!-- Pending Payments -->
+<!-- ==========================================================================
+     PENDING PAYMENTS SECTION
+     ========================================================================== -->
 @if ($pembayaranPending->isNotEmpty())
     <div class="bg-white rounded-2xl shadow-sm p-6 mb-8 border border-slate-200">
         <div class="flex items-center justify-between mb-6">
@@ -127,7 +140,7 @@
                             <p class="text-2xl font-bold text-amber-600">Rp {{ number_format($tagihan->jumlah_bayar, 0, ',', '.') }}</p>
                             <p class="text-sm text-slate-500">
                                 <i class="fas fa-calendar mr-1"></i>
-                                {{ \Carbon\Carbon::parse($tagihan->tanggal_bayar)->translatedFormat('d F Y') }}
+                                {{ \Carbon\Carbon::parse($tagihan->created_at)->translatedFormat('d F Y') }}
                             </p>
                         </div>
                     </div>
@@ -137,13 +150,15 @@
                             Pembayaran akan segera diproses setelah dikonfirmasi
                         </p>
                         <div class="flex items-center space-x-3">
+                            <!-- Tombol Batalkan Transaksi -->
                             <form action="{{ route('siswa.payment.cancel', $tagihan->id) }}" method="POST" onsubmit="return confirm('Yakin ingin membatalkan pendaftaran kelas ini?')">
                                 @csrf
                                 <button type="submit" class="px-6 py-2.5 border-2 border-slate-300 text-slate-600 rounded-xl hover:bg-slate-100 transition font-medium">
                                     Batalkan
                                 </button>
                             </form>
-                            <form action="{{ url('siswa/payment/process') }}" method="POST">
+                            <!-- Tombol Bayar (Lanjut Snap) -->
+                            <form onsubmit="handlePayment(event, this)">
                                 @csrf
                                 <input type="hidden" name="jadwal_id" value="{{ $tagihan->jadwal_id }}">
                                 <button type="submit" class="px-6 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition font-medium">
@@ -158,64 +173,89 @@
     </div>
 @endif
 
-<!-- Payment Methods Info
-<div class="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
-    <h3 class="text-lg font-bold text-slate-900 mb-4">Metode Pembayaran Tersedia</h3>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="border border-slate-200 rounded-xl p-4 text-center hover:border-blue-600 transition hover:bg-slate-50">
-            <i class="fas fa-university text-3xl text-blue-600 mb-2"></i>
-            <p class="text-sm font-medium text-slate-700">Transfer Bank</p>
-        </div>
-        <div class="border border-slate-200 rounded-xl p-4 text-center hover:border-blue-600 transition hover:bg-slate-50">
-            <i class="fas fa-wallet text-3xl text-blue-600 mb-2"></i>
-            <p class="text-sm font-medium text-slate-700">E-Wallet</p>
-        </div>
-        <div class="border border-slate-200 rounded-xl p-4 text-center hover:border-blue-600 transition hover:bg-slate-50">
-            <i class="fas fa-qrcode text-3xl text-blue-600 mb-2"></i>
-            <p class="text-sm font-medium text-slate-700">QRIS</p>
-        </div>
-        <div class="border border-slate-200 rounded-xl p-4 text-center hover:border-blue-600 transition hover:bg-slate-50">
-            <i class="fas fa-store text-3xl text-blue-600 mb-2"></i>
-            <p class="text-sm font-medium text-slate-700">Minimarket</p>
-        </div>
-    </div>
-</div> -->
-
+<!-- ==========================================================================
+     MIDTRANS SNAP SCRIPTS
+     ========================================================================== -->
 <script type="text/javascript"
     src="{{ env('MIDTRANS_IS_PRODUCTION', false) ? 'https://app.midtrans.com/snap/snap.js' : 'https://app.sandbox.midtrans.com/snap/snap.js' }}"
     data-client-key="{{ env('MIDTRANS_CLIENT_KEY') }}">
 </script>
 
 <script type="text/javascript">
-    const btnDaftarBaru = document.getElementById('btn-daftar-baru');
-    const formDaftarBaru = document.getElementById('form-daftar-baru');
+    /**
+     * Menangani proses pembayaran via AJAX untuk menyimpan data PENDING terlebih dahulu.
+     */
+    function handlePayment(event, form) {
+        event.preventDefault();
 
-    if (btnDaftarBaru && formDaftarBaru) {
-        btnDaftarBaru.addEventListener('click', function() {
-            const jadwalDipilih = document.querySelector('input[name="jadwal_id"]:checked');
-
-            if (!jadwalDipilih) {
+        // 1. Ambil jadwal_id dari form yang disubmit
+        let jadwalId;
+        if (form.id === 'form-daftar-baru') {
+            const radioSelected = document.querySelector('input[name="jadwal_id"]:checked');
+            if (!radioSelected) {
                 alert("⚠️ Mohon pilih Jadwal Kelas terlebih dahulu!");
                 return;
             }
+            jadwalId = radioSelected.value;
+        } else {
+            jadwalId = form.querySelector('input[name="jadwal_id"]').value;
+        }
 
-            // Panggil pop-up Midtrans Snap menggunakan token yang sudah di-generate dari Controller
-            window.snap.pay("{{ $snapToken ?? '' }}", {
-                onSuccess: function(result) {
-                    alert("Pembayaran berhasil dikonfirmasi!");
-                    formDaftarBaru.submit();
-                },
-                onPending: function(result) {
-                    alert("Menunggu pembayaran diselesaikan...");
-                },
-                onError: function(result) {
-                    alert("Maaf, pembayaran gagal diproses.");
-                },
-                onClose: function() {
-                    console.log('Siswa menutup pop-up sebelum membayar');
-                }
-            });
+        // 2. Efek loading pada tombol
+        const btn = form.querySelector('button[type="submit"]');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Memproses...';
+
+        // 3. Panggil Backend (AJAX)
+        fetch("{{ url('siswa/payment/process') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': "{{ csrf_token() }}"
+            },
+            body: JSON.stringify({ jadwal_id: jadwalId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+
+            if (data.status === 'success') {
+                // 4. Buka Pop-up Midtrans Snap menggunakan token dari backend
+                window.snap.pay(data.snap_token, {
+                    onSuccess: function(result) {
+                        alert("Pembayaran Berhasil!");
+                        window.location.href = "{{ route('siswa.dashboard') }}";
+                    },
+                    onPending: function(result) {
+                        alert("Silakan selesaikan pembayaran Anda sesuai instruksi Midtrans.");
+                        window.location.href = "{{ route('siswa.dashboard') }}";
+                    },
+                    onError: function(result) {
+                        alert("Pembayaran Gagal.");
+                        location.reload();
+                    },
+                    onClose: function() {
+                        alert("Anda menutup jendela pembayaran. Tagihan tersimpan aman di Dashboard.");
+                        window.location.href = "{{ route('siswa.dashboard') }}";
+                    }
+                });
+            } else {
+                alert(data.message || "Terjadi kesalahan.");
+            }
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            console.error('Error:', error);
+            alert("Gagal menghubungi server.");
         });
     }
 </script>
 @endsection
+{{-- 
+     CATATAN TROUBLESHOOTING:
+     Kesalahan sebelumnya adalah terdapat dua tag @endsection di akhir file, 
+     sehingga Laravel mencoba menutup section yang tidak pernah dibuka.
+--}}

@@ -10,6 +10,8 @@ use App\Models\MasterPengajar;
 use App\Models\MasterKelas;
 use App\Models\JadwalKelas;
 use App\Models\TransaksiPembayaran;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AdminTransaksiExport;
 use App\Exports\AdminPengajarExport;
@@ -152,22 +154,55 @@ class AdminController extends Controller
             'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
         ]);
 
-        $clash = JadwalKelas::where('pengajar_id', $request->pengajar_id)
-            ->where('hari', $request->hari)
-            ->where(function ($query) use ($request) {
-                $query->where('jam_mulai', '<', $request->jam_selesai)
-                      ->where('jam_selesai', '>', $request->jam_mulai);
-            })
-            ->exists();
+        try {
+            // Memulai transaksi database (Atomicity)
+            // Memastikan pembuatan jadwal hanya berhasil jika tidak ada error selama proses validasi overlap
+            DB::beginTransaction();
 
-        if ($clash) {
-            return redirect()->back()->withErrors([
-                'jam_mulai' => 'Gagal! Pengajar ini sudah memiliki kelas lain yang beririsan di hari dan jam tersebut.'
+            // --------------------------------------------------------------------------
+            // VALIDASI KONFLIK JADWAL (ADMIN - STORE)
+            // --------------------------------------------------------------------------
+            // Menggunakan lockForUpdate() agar data yang sedang dibaca tidak bisa diubah transaksi lain
+            $clash = JadwalKelas::where('pengajar_id', $request->pengajar_id)
+                ->where('hari', $request->hari)
+                ->where(function ($query) use ($request) {
+                    $query->where('jam_mulai', '<', $request->jam_selesai)
+                          ->where('jam_selesai', '>', $request->jam_mulai);
+                })
+                ->lockForUpdate()
+                ->exists();
+
+            if ($clash) {
+                // Batalkan transaksi jika terjadi bentrok jadwal
+                DB::rollBack();
+
+                return redirect()->back()->withErrors([
+                    'jam_mulai' => 'Gagal! Pengajar ini sudah memiliki kelas lain yang beririsan di hari dan jam tersebut.'
+                ])->withInput();
+            }
+
+            JadwalKelas::create(array_merge($request->all(), ['status' => 'upcoming']));
+
+            // Jika berhasil dan tidak ada error/bentrok, commit data ke database
+            DB::commit();
+
+            return redirect()->route('admin.jadwal.index')->with([
+                'message' => 'Jadwal berhasil ditambahkan', 
+                'message_type' => 'success'
+            ]);
+
+        } catch (\Exception $e) {
+            // Rollback jika terjadi exception (misal: koneksi terputus saat menyimpan)
+            DB::rollBack();
+
+            // Simpan log error asli untuk backend developer
+            Log::error('Error Pembuatan Jadwal Kelas: ' . $e->getMessage());
+
+            return back()->with([
+                'message' => 'Terjadi kesalahan sistem, transaksi dibatalkan dengan aman.',
+                'message_type' => 'error'
             ])->withInput();
         }
-
-        JadwalKelas::create(array_merge($request->all(), ['status' => 'upcoming']));
-        return redirect()->route('admin.jadwal.index')->with(['message' => 'Jadwal berhasil ditambahkan', 'message_type' => 'success']);
     }
 
     public function jadwalUpdate(Request $request, $id)

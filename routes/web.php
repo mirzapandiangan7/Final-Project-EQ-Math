@@ -30,7 +30,7 @@ Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('p
 Route::middleware(['auth', 'role:siswa', 'autocutoff'])->prefix('siswa')->name('siswa.')->group(function () {
     Route::get('dashboard', [SiswaController::class, 'index'])->name('dashboard');
     Route::get('pendaftaran', [SiswaController::class, 'pendaftaran'])->name('pendaftaran');
-    Route::get('checkout/{id}', [PaymentController::class, 'checkout'])->name('checkout');
+    Route::get('checkout/{id?}', [PaymentController::class, 'checkout'])->name('checkout');
     Route::post('payment/process', [PaymentController::class, 'process'])->name('payment.process');
     Route::post('payment/cancel/{id}', [PaymentController::class, 'cancelPayment'])->name('payment.cancel');
     Route::get('riwayat', [SiswaController::class, 'riwayat'])->name('riwayat');

@@ -8,6 +8,8 @@ use App\Models\JadwalKelas;
 use App\Models\TransaksiPembayaran;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -15,20 +17,18 @@ class PaymentController extends Controller
     public function checkout($kelasId = null)
     {
         $userId = Auth::id();
-        $user = Auth::user();
 
         // Mengambil tagihan yang masih pending
         $pembayaranPending = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'pending')
-            ->orderBy('tanggal_bayar', 'desc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         $kelasInfo = null;
         $jadwalList = collect();
-        $snapToken = "";
 
-        // Jika user memilih kelas baru, siapkan token Midtrans
+        // Jika user memilih kelas baru
         if ($kelasId) {
             $kelasInfo = MasterKelas::findOrFail($kelasId);
             $jadwalList = JadwalKelas::with('masterPengajar')
@@ -36,36 +36,9 @@ class PaymentController extends Controller
                 ->orderBy('hari')
                 ->orderBy('jam_mulai')
                 ->get();
-
-            $order_id = "EQ-" . time() . "-" . Str::random(5);
-            $total_bayar = $kelasInfo->harga + 2500; // Harga kelas + biaya admin
-
-            // Parameter untuk Midtrans Snap
-            $params = [
-                'transaction_details' => [
-                    'order_id' => $order_id,
-                    'gross_amount' => $total_bayar,
-                ],
-                'customer_details' => [
-                    'first_name' => $user->nama_lengkap ?? 'Siswa',
-                    'email'      => $user->email ?? 'siswa@example.com',
-                ]
-            ];
-
-            $serverKey = env('MIDTRANS_SERVER_KEY');
-            
-            // Mendapatkan Snap Token dari API Midtrans
-            // [PERBAIKAN]: Menambahkan withoutVerifying() untuk Bypass SSL di Localhost WAMP
-            $response = Http::withoutVerifying()
-                ->withBasicAuth($serverKey, '')
-                ->post('https://app.sandbox.midtrans.com/snap/v1/transactions', $params);
-
-            if ($response->successful()) {
-                $snapToken = $response->json('token');
-            }
         }
 
-        return view('siswa.checkout', compact('pembayaranPending', 'kelasInfo', 'jadwalList', 'snapToken'));
+        return view('siswa.checkout', compact('pembayaranPending', 'kelasInfo', 'jadwalList'));
     }
 
     public function process(Request $request)
@@ -75,72 +48,85 @@ class PaymentController extends Controller
         ]);
 
         $userId = Auth::id();
+        $user = Auth::user();
         $jadwalId = $request->jadwal_id;
 
-        $jadwal = JadwalKelas::with('masterKelas')->findOrFail($jadwalId);
+        try {
+            DB::beginTransaction();
 
-        // --------------------------------------------------------------------------
-        // VALIDASI SISWA 1: DOUBLE PURCHASE (Pembelian Ganda)
-        // --------------------------------------------------------------------------
-        // Cek apakah siswa sudah terdaftar di kelas ini dan pembayarannya masih
-        // berstatus 'settlement' (Lunas) ATAU 'pending' (Menunggu Pembayaran)
-        // --------------------------------------------------------------------------
-        $existing = TransaksiPembayaran::where('user_id', $userId)
-            ->where('jadwal_id', $jadwalId)
-            ->whereIn('status_pembayaran', ['settlement', 'pending'])
-            ->first();
+            $jadwal = JadwalKelas::with('masterKelas')->lockForUpdate()->findOrFail($jadwalId);
 
-        if ($existing) {
-            $msg = $existing->status_pembayaran == 'pending' 
-                ? 'Anda sudah melakukan pemesanan untuk kelas ini, silakan selesaikan tagihan pending Anda.'
-                : 'Anda sudah terdaftar di kelas ini.';
+            // 1. Cek apakah sudah ada transaksi PENDING untuk jadwal ini (Reuse)
+            $transaksi = TransaksiPembayaran::where('user_id', $userId)
+                ->where('jadwal_id', $jadwalId)
+                ->where('status_pembayaran', 'pending')
+                ->first();
 
-            return redirect()->back()->with([
-                'message' => $msg,
-                'message_type' => 'error'
+            // Jika sudah terdaftar (Lunas)
+            $isLunas = TransaksiPembayaran::where('user_id', $userId)
+                ->where('jadwal_id', $jadwalId)
+                ->where('status_pembayaran', 'settlement')
+                ->exists();
+
+            if ($isLunas) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda sudah terdaftar di kelas ini.'
+                ], 422);
+            }
+
+            // Jika belum ada record pending, buat baru
+            if (!$transaksi) {
+                $transaksi = new TransaksiPembayaran();
+                $transaksi->order_id = "EQ-" . time() . "-" . Str::random(5);
+                $transaksi->user_id = $userId;
+                $transaksi->jadwal_id = $jadwalId;
+                $transaksi->jumlah_bayar = $jadwal->masterKelas->harga + 2500;
+                $transaksi->status_pembayaran = 'pending';
+            }
+
+            // 2. Generate Snap Token jika belum ada atau kadaluwarsa
+            if (!$transaksi->snap_token) {
+                $params = [
+                    'transaction_details' => [
+                        'order_id' => $transaksi->order_id,
+                        'gross_amount' => $transaksi->jumlah_bayar,
+                    ],
+                    'customer_details' => [
+                        'first_name' => $user->nama_lengkap ?? 'Siswa',
+                        'email'      => $user->email ?? 'siswa@example.com',
+                    ]
+                ];
+
+                $serverKey = env('MIDTRANS_SERVER_KEY');
+                $response = Http::withoutVerifying()
+                    ->withBasicAuth($serverKey, '')
+                    ->post('https://app.sandbox.midtrans.com/snap/v1/transactions', $params);
+
+                if ($response->successful()) {
+                    $transaksi->snap_token = $response->json('token');
+                } else {
+                    throw new \Exception('Gagal mendapatkan token Midtrans');
+                }
+            }
+
+            $transaksi->save();
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'snap_token' => $transaksi->snap_token
             ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error Payment Process: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan sistem, silakan coba lagi.'
+            ], 500);
         }
-
-        // --------------------------------------------------------------------------
-        // VALIDASI SISWA 2: KONFLIK WAKTU (Time Overlap Validation)
-        // --------------------------------------------------------------------------
-        // Cek apakah siswa sudah memiliki kelas lain (yang lunas/pending)
-        // di mana hari dan jamnya beririsan dengan jadwal kelas yang akan dibeli.
-        // Logika Overlap: (Start_DB < End_Input) AND (End_DB > Start_Input)
-        // --------------------------------------------------------------------------
-        $clashingTransaction = TransaksiPembayaran::where('user_id', $userId)
-            ->whereIn('status_pembayaran', ['settlement', 'pending'])
-            ->whereHas('jadwalKelas', function ($query) use ($jadwal) {
-                $query->where('hari', $jadwal->hari)
-                      ->where('jam_mulai', '<', $jadwal->jam_selesai)
-                      ->where('jam_selesai', '>', $jadwal->jam_mulai);
-            })
-            ->first();
-
-        if ($clashingTransaction) {
-            return redirect()->back()->with([
-                'message' => 'Gagal mendaftar! Jadwal ini berbenturan dengan jadwal kelas Anda yang lain di hari ' . $jadwal->hari . ' jam ' . \Carbon\Carbon::parse($jadwal->jam_mulai)->format('H:i') . '.',
-                'message_type' => 'error'
-            ]);
-        }
-
-        // --- Logika Jika Tidak Ada Transaksi Pending untuk Jadwal Tersebut ---
-        // (Kita sudah memblokir pending di logika Double Purchase atas, jadi selalu buat record baru)
-        $transaksi = new TransaksiPembayaran();
-        $transaksi->order_id = "EQ-" . time() . "-" . Str::random(5);
-        $transaksi->user_id = $userId;
-        $transaksi->jadwal_id = $jadwalId;
-        $transaksi->jumlah_bayar = $jadwal->masterKelas->harga + 2500;
-
-        // --- Simulasi Jika Midtrans Sukses Secara Langsung ---
-        $transaksi->status_pembayaran = 'settlement';
-        $transaksi->tanggal_bayar = now();
-        $transaksi->save();
-
-        return redirect('siswa/dashboard')->with([
-            'message' => 'Pembayaran berhasil! Selamat belajar di kelas ' . $jadwal->masterKelas->nama_kelas,
-            'message_type' => 'success'
-        ]);
     }
 
     public function webhook(Request $request)

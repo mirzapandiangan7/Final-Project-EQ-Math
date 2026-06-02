@@ -5,17 +5,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EQ - Math | Pendaftaran Kelas Matematika</title>
+    <!-- AOS CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="bg-slate-50 text-gray-800 font-sans">
-    <nav class="bg-blue-600 text-white shadow-md fixed w-full top-0 z-50">
+<body class="bg-slate-50 text-gray-800 font-sans overflow-x-hidden">
+    <nav class="bg-blue-600 text-white shadow-md fixed w-full top-0 z-50" data-aos="fade-down" data-aos-duration="1000">
         <div class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <a href="#" class="text-2xl font-bold tracking-wider">EQ - Math</a>
+            <a href="#" class="text-2xl font-bold tracking-wider hover:scale-105 transition-transform">EQ - Math</a>
             <div class="space-x-4">
                 <a href="#tentang-kami" class="hover:text-blue-200 transition">Tentang Kami</a>
                 <a href="#harga-kelas" class="hover:text-blue-200 transition">Pricing</a>
-                <a href="{{ route('login') }}" class="bg-white text-blue-600 px-5 py-2 rounded-full font-semibold hover:bg-gray-100 transition shadow">
+                <a href="{{ route('login') }}" class="bg-white text-blue-600 px-5 py-2 rounded-full font-semibold hover:bg-gray-100 hover:scale-105 active:scale-95 transition-all shadow-lg">
                     Masuk / Daftar
                 </a>
             </div>
@@ -26,26 +28,28 @@
         <video autoplay loop muted playsinline class="absolute inset-0 w-full h-full object-cover z-0">
             <source src="{{ asset('assets/background-index.webm') }}" type="video/webm" />
         </video>
-        <header class="relative z-10 bg-white/85 hover:bg-white backdrop-blur-sm rounded-3xl shadow-2xl max-w-8xl mx-auto px-6 py-30 text-center transition-all duration-300 ease-in-out">
-            <div>
-                <h1 class="text-5xl font-extrabold text-gray-900 mb-6">
+        <header class="relative z-10 bg-white/85 hover:bg-white backdrop-blur-sm rounded-3xl shadow-2xl max-w-8xl mx-auto px-6 py-30 text-center transition-all duration-500 ease-in-out" data-aos="zoom-in" data-aos-duration="1200">
+            <div class="py-20">
+                <h1 class="text-5xl font-extrabold text-gray-900 mb-6" data-aos="fade-up" data-aos-delay="300">
                     Pahami Matematika dengan
                     <span class="text-blue-600">Lebih Mudah</span>
                 </h1>
-                <p class="text-lg text-gray-600 mb-10 max-w-2xl mx-auto">
+                <p class="text-lg text-gray-600 mb-10 max-w-2xl mx-auto" data-aos="fade-up" data-aos-delay="500">
                     Platform pendaftaran kelas matematika interaktif untuk jenjang SD, SMP, dan SMA. Pilih jadwalmu, temukan pengajar terbaik, dan tingkatkan nilaimu sekarang.
                 </p>
-                <a href="{{ route('register') }}" class="bg-blue-600 text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-blue-700 shadow-lg transition">
-                    Bergabung Sekarang
-                </a>
+                <div data-aos="fade-up" data-aos-delay="700">
+                    <a href="{{ route('register') }}" class="inline-block bg-blue-600 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-blue-700 hover:scale-105 hover:shadow-blue-500/50 hover:shadow-xl active:scale-95 shadow-lg transition-all duration-300">
+                        Bergabung Sekarang
+                    </a>
+                </div>
             </div>
         </header>
     </div>
 
-    <section id="tentang-kami" class="scroll-mt-24 py-20 bg-white pt-28 -mt-16">
+    <section id="tentang-kami" class="scroll-mt-24 py-20 bg-white pt-28 -mt-16 overflow-hidden">
         <div class="container mx-auto px-6 max-w-6xl">
             <div class="grid md:grid-cols-2 gap-12 items-center">
-                <div>
+                <div data-aos="fade-right" data-aos-duration="1000">
                     <h4 class="text-blue-600 font-bold mb-2 uppercase tracking-wide">
                         Mengenal EQ - Math
                     </h4>
@@ -61,8 +65,8 @@
                     </p>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 font-medium text-gray-800">
-                        <div class="flex items-start">
-                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm">
+                        <div class="flex items-start group hover:-translate-y-1 transition-all duration-300" data-aos="fade-up" data-aos-delay="100">
+                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                 🚀
                             </div>
                             <div>
@@ -72,8 +76,8 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-start">
-                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm">
+                        <div class="flex items-start group hover:-translate-y-1 transition-all duration-300" data-aos="fade-up" data-aos-delay="200">
+                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                 👨‍🏫
                             </div>
                             <div>
@@ -83,8 +87,8 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-start">
-                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm">
+                        <div class="flex items-start group hover:-translate-y-1 transition-all duration-300" data-aos="fade-up" data-aos-delay="300">
+                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                 ⏰
                             </div>
                             <div>
@@ -94,8 +98,8 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-start">
-                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm">
+                        <div class="flex items-start group hover:-translate-y-1 transition-all duration-300" data-aos="fade-up" data-aos-delay="400">
+                            <div class="bg-blue-100 text-blue-600 p-3 rounded-xl mr-4 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                 💻
                             </div>
                             <div>
@@ -108,10 +112,10 @@
                     </div>
                 </div>
 
-                <div class="relative mt-10 md:mt-0">
-                    <div class="absolute inset-0 bg-blue-600 rounded-3xl transform translate-x-4 translate-y-4 -z-10 opacity-20">
+                <div class="relative mt-10 md:mt-0" data-aos="fade-left" data-aos-duration="1200">
+                    <div class="absolute inset-0 bg-blue-600 rounded-3xl transform translate-x-4 translate-y-4 -z-10 opacity-20 animate-pulse">
                     </div>
-                    <img src="{{ asset('assets/landing-page-img1.jpeg') }}" alt="Belajar Matematika Interaktif" class="rounded-3xl shadow-2xl w-full object-cover aspect-[4/3] border border-gray-100" />
+                    <img src="{{ asset('assets/landing-page-img1.jpeg') }}" alt="Belajar Matematika Interaktif" class="rounded-3xl shadow-2xl w-full object-cover aspect-[4/3] border border-gray-100 hover:scale-[1.02] transition-transform duration-500" />
                 </div>
             </div>
         </div>
@@ -119,17 +123,19 @@
 
     <section id="harga-kelas" class="py-20 bg-slate-50 pt-28 -mt-16 scroll-mt-24">
         <div class="container mx-auto px-6 max-w-5xl text-center">
-            <h4 class="text-blue-600 font-bold mb-2 uppercase tracking-wide">Investasi Pendidikan</h4>
-            <h2 class="text-3xl lg:text-4xl font-extrabold text-gray-900 mb-4">Pilih Paket Belajarmu</h2>
-            <p class="text-gray-600 max-w-2xl mx-auto mb-16">
-                Satu akses tak terbatas untuk semua materi, kelas, dan fitur interaktif kami.
-            </p>
+            <div data-aos="fade-up">
+                <h4 class="text-blue-600 font-bold mb-2 uppercase tracking-wide">Investasi Pendidikan</h4>
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-gray-900 mb-4">Pilih Paket Belajarmu</h2>
+                <p class="text-gray-600 max-w-2xl mx-auto mb-16">
+                    Satu akses tak terbatas untuk semua materi, kelas, dan fitur interaktif kami.
+                </p>
+            </div>
 
-            <div class="max-w-md mx-auto">
-                <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-shadow duration-300">
+            <div class="max-w-md mx-auto" data-aos="zoom-in-up" data-aos-duration="1000">
+                <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 hover:shadow-2xl hover:-translate-y-4 transition-all duration-500 group">
                     
                     <div class="px-6 py-8 sm:p-10 sm:pb-6 text-center">
-                        <span class="inline-block px-4 py-1 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 mb-4">
+                        <span class="inline-block px-4 py-1 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                             Akses Fleksibel
                         </span>
                         <div class="flex justify-center items-baseline text-center">
@@ -160,7 +166,7 @@
                         </ul>
                         
                         <div class="mt-8">
-                            <a href="{{ route('register') }}" class="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-bold rounded-xl text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md">
+                            <a href="{{ route('register') }}" class="w-full flex justify-center items-center px-6 py-4 border border-transparent text-base font-bold rounded-xl text-white bg-blue-600 hover:bg-blue-700 hover:scale-105 hover:shadow-lg active:scale-95 transition-all duration-300 shadow-md">
                                 Mulai Belajar Sekarang
                             </a>
                         </div>
@@ -171,9 +177,35 @@
         </div>
     </section>
 
-    <footer class="bg-gray-800 text-white text-center py-6">
-        <p>&copy; {{ date('Y') }} EQ - Math. Dibuat untuk ETS Pemrograman Web.</p>
+    <footer class="bg-gray-800 text-white text-center py-10">
+        <div class="container mx-auto px-6">
+            <h3 class="text-2xl font-bold mb-4">EQ - Math</h3>
+            <p class="text-gray-400 mb-6 max-w-md mx-auto">Solusi cerdas memahami matematika dengan cara yang menyenangkan dan interaktif.</p>
+            <div class="flex justify-center space-x-6 mb-8">
+                <a href="#" class="hover:text-blue-400 transition-colors text-xl"><i class="fab fa-instagram"></i></a>
+                <a href="#" class="hover:text-blue-400 transition-colors text-xl"><i class="fab fa-facebook"></i></a>
+                <a href="#" class="hover:text-blue-400 transition-colors text-xl"><i class="fab fa-twitter"></i></a>
+            </div>
+            <div class="border-t border-gray-700 pt-8">
+                <p class="text-sm text-gray-500">&copy; {{ date('Y') }} EQ - Math. Dibuat untuk ETS Pemrograman Web.</p>
+            </div>
+        </div>
     </footer>
+
+    <!-- AOS JS -->
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AOS.init({
+                once: true,
+                duration: 800,
+                easing: 'ease-out-cubic',
+                offset: 100
+            });
+        });
+    </script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
 </body>
 
 </html>
