@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Models\ActivityLog;
 use App\Models\User;
 use App\Models\MasterPengajar;
 use App\Models\MasterKelas;
@@ -63,11 +62,7 @@ class AdminController extends Controller
     public function pengajarStore(Request $request)
     {
         $request->validate(['nama' => 'required|string|max:100']);
-        $pengajar = MasterPengajar::create(['nama_pengajar' => $request->nama]);
-        ActivityLog::log('created pengajar', $pengajar, [
-            'attributes' => $pengajar->toArray(),
-        ]);
-
+        MasterPengajar::create(['nama_pengajar' => $request->nama]);
         return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil ditambahkan', 'message_type' => 'success']);
     }
 
@@ -75,27 +70,13 @@ class AdminController extends Controller
     {
         $request->validate(['nama' => 'required|string|max:100']);
         $pengajar = MasterPengajar::findOrFail($id);
-        $original = $pengajar->getOriginal();
         $pengajar->update(['nama_pengajar' => $request->nama]);
-
-        ActivityLog::log('updated pengajar', $pengajar, [
-            'old' => $original,
-            'attributes' => $pengajar->getChanges(),
-        ]);
-
         return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil diperbarui', 'message_type' => 'success']);
     }
 
     public function pengajarDestroy($id)
     {
-        $pengajar = MasterPengajar::findOrFail($id);
-        $old = $pengajar->toArray();
-        $pengajar->delete();
-
-        ActivityLog::log('deleted pengajar', $pengajar, [
-            'old' => $old,
-        ]);
-
+        MasterPengajar::destroy($id);
         return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil dihapus', 'message_type' => 'success']);
     }
 
@@ -124,11 +105,7 @@ class AdminController extends Controller
             'harga' => 'required|numeric',
             'deskripsi' => 'required|string'
         ]);
-        $kelas = MasterKelas::create($request->all());
-        ActivityLog::log('created kelas', $kelas, [
-            'attributes' => $kelas->toArray(),
-        ]);
-
+        MasterKelas::create($request->all());
         return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil ditambahkan', 'message_type' => 'success']);
     }
 
@@ -141,27 +118,13 @@ class AdminController extends Controller
             'deskripsi' => 'required|string'
         ]);
         $kelas = MasterKelas::findOrFail($id);
-        $original = $kelas->getOriginal();
         $kelas->update($request->all());
-
-        ActivityLog::log('updated kelas', $kelas, [
-            'old' => $original,
-            'attributes' => $kelas->getChanges(),
-        ]);
-
         return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil diperbarui', 'message_type' => 'success']);
     }
 
     public function kelasDestroy($id)
     {
-        $kelas = MasterKelas::findOrFail($id);
-        $old = $kelas->toArray();
-        $kelas->delete();
-
-        ActivityLog::log('deleted kelas', $kelas, [
-            'old' => $old,
-        ]);
-
+        MasterKelas::destroy($id);
         return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil dihapus', 'message_type' => 'success']);
     }
 
@@ -218,11 +181,7 @@ class AdminController extends Controller
                 ])->withInput();
             }
 
-            $jadwal = JadwalKelas::create(array_merge($request->all(), ['status' => 'upcoming']));
-
-            ActivityLog::log('created jadwal', $jadwal, [
-                'attributes' => $jadwal->toArray(),
-            ]);
+            JadwalKelas::create(array_merge($request->all(), ['status' => 'upcoming']));
 
             // Jika berhasil dan tidak ada error/bentrok, commit data ke database
             DB::commit();
@@ -273,27 +232,13 @@ class AdminController extends Controller
         }
 
         $jadwal = JadwalKelas::findOrFail($id);
-        $original = $jadwal->getOriginal();
         $jadwal->update($request->all());
-
-        ActivityLog::log('updated jadwal', $jadwal, [
-            'old' => $original,
-            'attributes' => $jadwal->getChanges(),
-        ]);
-
         return redirect()->route('admin.jadwal.index')->with(['message' => 'Jadwal berhasil diperbarui', 'message_type' => 'success']);
     }
 
     public function jadwalDestroy($id)
     {
-        $jadwal = JadwalKelas::findOrFail($id);
-        $old = $jadwal->toArray();
-        $jadwal->delete();
-
-        ActivityLog::log('deleted jadwal', $jadwal, [
-            'old' => $old,
-        ]);
-
+        JadwalKelas::destroy($id);
         return redirect()->route('admin.jadwal.index')->with(['message' => 'Jadwal berhasil dihapus', 'message_type' => 'success']);
     }
 
@@ -325,17 +270,11 @@ class AdminController extends Controller
         ]);
 
         $transaksi = TransaksiPembayaran::findOrFail($id);
-        $oldStatus = $transaksi->status_pembayaran;
         $transaksi->status_pembayaran = $request->status;
         if ($request->status === 'settlement' && !$transaksi->tanggal_bayar) {
             $transaksi->tanggal_bayar = now();
         }
         $transaksi->save();
-
-        ActivityLog::log('updated pembayaran status', $transaksi, [
-            'old' => ['status_pembayaran' => $oldStatus],
-            'attributes' => ['status_pembayaran' => $transaksi->status_pembayaran, 'tanggal_bayar' => $transaksi->tanggal_bayar],
-        ]);
 
         return redirect()->back()->with([
             'message' => 'Status pembayaran berhasil diperbarui',
@@ -383,13 +322,7 @@ class AdminController extends Controller
         ]);
 
         $user = User::findOrFail(Auth::id());
-        $original = $user->only('nama_lengkap', 'email', 'no_wa');
         $user->update($request->only('nama_lengkap', 'email', 'no_wa'));
-
-        ActivityLog::log('updated profile', $user, [
-            'old' => $original,
-            'attributes' => $request->only('nama_lengkap', 'email', 'no_wa'),
-        ]);
 
         return redirect()->back()->with(['message' => 'Profil berhasil diperbarui', 'message_type' => 'success']);
     }
@@ -408,10 +341,6 @@ class AdminController extends Controller
         }
 
         $user->update(['password' => Hash::make($request->new_password)]);
-
-        ActivityLog::log('updated password', $user, [
-            'attributes' => ['password' => 'updated'],
-        ]);
 
         return redirect()->back()->with(['message' => 'Password berhasil diubah', 'message_type' => 'success']);
     }

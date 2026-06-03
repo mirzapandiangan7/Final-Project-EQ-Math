@@ -63,11 +63,6 @@
                 <i class="fas fa-user-graduate w-6 text-center"></i>
                 <span class="ml-3">Data Siswa</span>
             </a>
-            <a href="{{ route('admin.activity-log.index') }}"
-               class="nav-item flex items-center px-3 py-2.5 rounded-lg hover:bg-blue-600 transition {{ request()->routeIs('admin.activity-log.*') ? 'bg-blue-800 border-l-4 border-amber-400' : '' }}">
-                <i class="fas fa-history w-6 text-center"></i>
-                <span class="ml-3">Activity Log</span>
-            </a>
 
             <p class="text-blue-300 text-xs uppercase tracking-wider mb-2 mt-6 px-3">Akun</p>
             <a href="{{ route('admin.pengaturan.index') }}" class="nav-item flex items-center px-3 py-2.5 rounded-lg hover:bg-blue-600 transition {{ request()->routeIs('admin.pengaturan.*') ? 'bg-blue-800 border-l-4 border-amber-400' : '' }}">
