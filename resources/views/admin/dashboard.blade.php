@@ -103,6 +103,62 @@
     </div>
 </div>
 
+<!-- Grafik Analitik Admin -->
+<div class="mb-8">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-xl font-bold text-slate-900">Grafik Analitik Admin</h2>
+            <p class="text-slate-500 text-sm mt-1">Analitik Pembayaran & Kelas</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 mb-6">
+        <!-- Line Chart - Pendapatan Bulanan -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-900">
+                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                    Pendapatan Bulanan
+                </h3>
+                <span class="text-sm text-slate-500">Tahun {{ now()->year }}</span>
+            </div>
+            <div class="relative h-72">
+                <canvas id="monthlyRevenueChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Doughnut Chart - Status Pembayaran -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-900">
+                    <i class="fas fa-chart-pie text-green-600 mr-2"></i>
+                    Status Pembayaran
+                </h3>
+                <span class="text-sm text-slate-500">Komposisi Status</span>
+            </div>
+            <div class="relative h-64">
+                <canvas id="paymentStatusChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Bar Chart - Pendapatan per Kelas -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-900">
+                    <i class="fas fa-chart-bar text-purple-600 mr-2"></i>
+                    Pendapatan per Kelas
+                </h3>
+                <span class="text-sm text-slate-500">Top 10 Kelas</span>
+            </div>
+            <div class="relative h-64">
+                <canvas id="revenueByClassChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Transaksi Terbaru -->
 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 mb-8">
     <div class="p-6 border-b border-slate-200">
@@ -214,4 +270,235 @@
         </div>
     </a>
 </div>
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Format Rupiah untuk tooltip
+    const formatRupiah = (value) => {
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            maximumFractionDigits: 0
+        }).format(value);
+    };
+
+    // Chart.js Global Configuration
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#64748b';
+
+    // Data dari PHP
+    const monthlyRevenueLabels = @json($monthlyRevenueLabels);
+    const monthlyRevenueData = @json($monthlyRevenueData);
+    const paymentStatusLabels = @json($paymentStatusLabels);
+    const paymentStatusData = @json($paymentStatusData);
+    const revenueByClassLabels = @json($revenueByClassLabels);
+    const revenueByClassData = @json($revenueByClassData);
+
+    // 1. Line Chart - Pendapatan Bulanan
+    const monthlyRevenueCtx = document.getElementById('monthlyRevenueChart');
+    if (monthlyRevenueCtx) {
+        new Chart(monthlyRevenueCtx, {
+            type: 'line',
+            data: {
+                labels: monthlyRevenueLabels,
+                datasets: [{
+                    label: 'Pendapatan (Rp)',
+                    data: monthlyRevenueData,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        padding: 12,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return 'Pendapatan: ' + formatRupiah(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#e2e8f0',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000000) {
+                                    return 'Rp ' + (value / 1000000).toFixed(0) + 'jt';
+                                } else if (value >= 1000) {
+                                    return 'Rp ' + (value / 1000).toFixed(0) + 'rb';
+                                }
+                                return 'Rp ' + value;
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Doughnut Chart - Status Pembayaran
+    const paymentStatusCtx = document.getElementById('paymentStatusChart');
+    if (paymentStatusCtx) {
+        const totalTransactions = paymentStatusData.reduce((a, b) => a + b, 0);
+        const hasData = totalTransactions > 0;
+
+        new Chart(paymentStatusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: paymentStatusLabels,
+                datasets: [{
+                    data: paymentStatusData,
+                    backgroundColor: [
+                        '#f59e0b', // Pending - Amber
+                        '#10b981', // Settlement - Green
+                        '#ef4444', // Cancel - Red
+                        '#8b5cf6'  // Expire - Purple
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const percentage = hasData ? ((value / totalTransactions) * 100).toFixed(1) : 0;
+                                return label + ': ' + value + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 3. Bar Chart - Pendapatan per Kelas
+    const revenueByClassCtx = document.getElementById('revenueByClassChart');
+    if (revenueByClassCtx && revenueByClassLabels.length > 0) {
+        new Chart(revenueByClassCtx, {
+            type: 'bar',
+            data: {
+                labels: revenueByClassLabels,
+                datasets: [{
+                    label: 'Pendapatan (Rp)',
+                    data: revenueByClassData,
+                    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                    borderColor: '#8b5cf6',
+                    borderWidth: 0,
+                    borderRadius: 6,
+                    borderSkipped: false,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        padding: 12,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return 'Pendapatan: ' + formatRupiah(context.parsed.x);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#e2e8f0',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000000) {
+                                    return (value / 1000000).toFixed(0) + 'jt';
+                                } else if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + 'rb';
+                                }
+                                return value;
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }
+                }
+            }
+        });
+    } else if (revenueByClassCtx) {
+        // Empty state untuk chart tanpa data
+        const canvas = revenueByClassCtx;
+        const parent = canvas.parentElement;
+        parent.innerHTML = `
+            <div class="flex items-center justify-center h-full text-center">
+                <div>
+                    <i class="fas fa-chart-bar text-4xl text-slate-300 mb-3"></i>
+                    <p class="text-slate-500">Belum ada data pendapatan per kelas</p>
+                    <p class="text-slate-400 text-sm mt-1">Data akan muncul setelah ada transaksi settlement</p>
+                </div>
+            </div>
+        `;
+    }
+</script>
+@endpush
 @endsection
