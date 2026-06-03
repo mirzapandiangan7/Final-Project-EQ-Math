@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SiswaController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ActivityLogController;
 
 Route::get('/', function () {
     return view('landing');
@@ -72,6 +73,9 @@ Route::middleware(['auth', 'role:admin', 'autocutoff'])->prefix('admin')->name('
     // Siswa
     Route::get('siswa', [AdminController::class, 'siswaIndex'])->name('siswa.index');
     Route::get('siswa/export', [AdminController::class, 'exportSiswa'])->name('siswa.export');
+
+    // Activity Log
+    Route::resource('activity-log', ActivityLogController::class)->only(['index', 'show', 'destroy']);
 
     // Pengaturan
     Route::get('pengaturan', [AdminController::class, 'pengaturanIndex'])->name('pengaturan.index');
