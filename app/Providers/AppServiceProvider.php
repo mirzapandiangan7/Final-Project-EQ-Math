@@ -4,6 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use App\Listeners\AuthLogListener;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,5 +25,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+
+        // Register Activity Log Listeners
+        Event::listen(Login::class, [AuthLogListener::class, 'handleLogin']);
+        Event::listen(Logout::class, [AuthLogListener::class, 'handleLogout']);
     }
 }

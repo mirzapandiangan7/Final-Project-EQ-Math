@@ -74,6 +74,11 @@
             @else
                 <p class="text-slate-500">Tidak ada detail perubahan yang tersimpan.</p>
             @endif
+        <div class="mt-8 border-t border-slate-200 pt-6">
+            <h2 class="font-semibold text-slate-900 mb-3">Raw Data (JSON)</h2>
+            <div class="bg-slate-900 rounded-xl p-6 overflow-x-auto shadow-inner">
+                <pre class="text-green-400 font-mono text-sm leading-relaxed"><code>{{ json_encode($log->properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</code></pre>
+            </div>
         </div>
     </div>
 </div>

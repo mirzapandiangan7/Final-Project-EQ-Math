@@ -75,6 +75,7 @@ Route::middleware(['auth', 'role:admin', 'autocutoff'])->prefix('admin')->name('
     Route::get('siswa/export', [AdminController::class, 'exportSiswa'])->name('siswa.export');
 
     // Activity Log
+    Route::get('activity-log/autocomplete', [ActivityLogController::class, 'autocompleteUser'])->name('activity-log.autocomplete');
     Route::resource('activity-log', ActivityLogController::class)->only(['index', 'show', 'destroy']);
 
     // Pengaturan

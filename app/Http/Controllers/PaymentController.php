@@ -138,6 +138,13 @@ class PaymentController extends Controller
             $transaksi->save();
             DB::commit();
 
+            // Catat log aktivitas pendaftaran kelas
+            catatLog('memulai proses pembayaran kelas', $transaksi, [
+                'jadwal_id' => $jadwalId,
+                'order_id' => $transaksi->order_id,
+                'jumlah' => $transaksi->jumlah_bayar
+            ]);
+
             return response('', 200)->json([
                 'status' => 'success',
                 'snap_token' => $transaksi->snap_token
@@ -226,6 +233,10 @@ class PaymentController extends Controller
 
         $transaksi->status_pembayaran = 'cancel';
         $transaksi->save();
+
+        catatLog('membatalkan pembayaran kelas', $transaksi, [
+            'order_id' => $transaksi->order_id
+        ]);
 
         return redirect()->route('siswa.dashboard')->with([
             'message' => 'Pembayaran berhasil dibatalkan.',
