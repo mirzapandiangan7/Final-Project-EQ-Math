@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -15,9 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'autocutoff' => \App\Http\Middleware\AutoCutOff::class,
         ]);
-        $middleware->validateCsrfTokens(except: [
-            'payment/webhook',
-        ]);
+        // CSRF Exception dihapus karena webhook sudah pindah ke api.php (otomatis bypass)
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -4,20 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 
 class AuthController extends Controller
 {
-    // Tampilkan form login
-    public function showLogin()
+    /**
+     * Tampilkan form login
+     */
+    public function showLogin(): View
     {
-        return view('auth.login');
+        return view('auth.login', []);
     }
 
-    // Proses login dengan remember me
-    public function login(Request $request)
+    /**
+     * Proses login dengan remember me
+     */
+    public function login(Request $request): RedirectResponse
     {
         $request->validate([
             'email' => 'required|email',
@@ -25,15 +30,18 @@ class AuthController extends Controller
         ]);
 
         $credentials = $request->only('email', 'password');
-        $remember = $request->has('remember'); // Cek apakah checkbox dicentang
+        $remember = $request->has('remember');
 
-        if (Auth::attempt($credentials, $remember)) {
+        if (auth()->attempt($credentials, $remember)) {
             $request->session()->regenerate();
-            
+
             // Catat waktu aktivitas awal (untuk fitur Auto Cut-Off)
             Session::put('last_activity', time());
 
-            if (Auth::user()->role == 'admin') {
+            /** @var \App\Models\User $user */
+            $user = auth()->user();
+
+            if ($user->role === 'admin') {
                 return redirect()->intended(route('admin.dashboard'));
             }
             return redirect()->intended(route('siswa.dashboard'));
@@ -44,40 +52,47 @@ class AuthController extends Controller
         ])->withInput($request->only('email'));
     }
 
-    // Tampilkan form registrasi
-    public function showRegister()
+    /**
+     * Tampilkan form registrasi
+     */
+    public function showRegister(): View
     {
-        return view('auth.register');
+        return view('auth.register', []);
     }
 
-    // Proses registrasi
-    public function register(Request $request)
+    /**
+     * Proses registrasi
+     */
+    public function register(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_lengkap' => 'required|string|max:100',
             'email' => 'required|string|email|max:100|unique:users',
             'password' => 'required|string|min:6|confirmed',
             'no_wa' => 'nullable|string|max:20'
         ]);
 
-        $user = User::create([
-            'nama_lengkap' => $request->nama_lengkap,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'no_wa' => $request->no_wa,
-            'role' => 'siswa' // Default role
+        /** @var \App\Models\User $user */
+        $user = User::query()->create([
+            'nama_lengkap' => $validated['nama_lengkap'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'no_wa' => $validated['no_wa'],
+            'role' => 'siswa'
         ]);
 
-        Auth::login($user);
+        auth()->login($user);
         Session::put('last_activity', time());
 
         return redirect()->route('siswa.dashboard')->with('success', 'Registrasi berhasil! Selamat datang di EQ-Math.');
     }
 
-    // Proses logout
-    public function logout(Request $request)
+    /**
+     * Proses logout
+     */
+    public function logout(Request $request): RedirectResponse
     {
-        Auth::logout();
+        auth()->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect()->route('login');
@@ -87,14 +102,18 @@ class AuthController extends Controller
     // OTP & RESET PASSWORD LOGIC
     // ==========================================
 
-    // Tampilkan form minta OTP (Lupa Password)
-    public function showForgotPassword()
+    /**
+     * Tampilkan form minta OTP (Lupa Password)
+     */
+    public function showForgotPassword(): View
     {
-        return view('auth.forgot-password');
+        return view('auth.forgot-password', []);
     }
 
-    // Cari akun dan generate OTP
-    public function generateOtp(Request $request)
+    /**
+     * Cari akun dan generate OTP
+     */
+    public function generateOtp(Request $request): RedirectResponse
     {
         $request->validate([
             'email' => 'required|email|exists:users,email'
@@ -103,42 +122,45 @@ class AuthController extends Controller
         ]);
 
         // Generate 6 digit angka acak
-        $otpCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-        
-        // Simpan di session (bisa juga disimpan di tabel users jika butuh persisten)
+        $otpCode = str_pad((string)rand(0, 999999), 6, '0', STR_PAD_LEFT);
+
         Session::put('reset_email', $request->email);
         Session::put('reset_otp', $otpCode);
         Session::put('otp_expires_at', now()->addMinutes(5));
 
-        // Karena kita simulasi (tanpa API Email/WA betulan), kita langsung redirect 
-        // ke halaman mockup yang pura-puranya menampilkan layar HP/Email yang menerima pesan.
         return redirect()->route('otp.mockup');
     }
 
-    // Mockup tampilan HP (pura-puranya email masuk)
-    public function showOtpMockup()
+    /**
+     * Mockup tampilan HP
+     */
+    public function showOtpMockup(): View|RedirectResponse
     {
         if (!Session::has('reset_otp')) {
             return redirect()->route('password.request');
         }
-        
+
         $otp = Session::get('reset_otp');
         $email = Session::get('reset_email');
-        
+
         return view('auth.show-otp', compact('otp', 'email'));
     }
 
-    // Tampilkan form verifikasi input OTP
-    public function showVerifyOtp()
+    /**
+     * Tampilkan form verifikasi input OTP
+     */
+    public function showVerifyOtp(): View|RedirectResponse
     {
         if (!Session::has('reset_email')) {
             return redirect()->route('password.request');
         }
-        return view('auth.verify-otp');
+        return view('auth.verify-otp', []);
     }
 
-    // Validasi input OTP
-    public function verifyOtp(Request $request)
+    /**
+     * Validasi input OTP
+     */
+    public function verifyOtp(Request $request): RedirectResponse
     {
         $request->validate([
             'otp' => 'required|string|size:6'
@@ -160,17 +182,21 @@ class AuthController extends Controller
         return redirect()->route('password.reset');
     }
 
-    // Tampilkan form ganti password
-    public function showResetPassword()
+    /**
+     * Tampilkan form ganti password
+     */
+    public function showResetPassword(): View|RedirectResponse
     {
         if (!Session::has('otp_verified')) {
             return redirect()->route('password.request');
         }
-        return view('auth.reset-password');
+        return view('auth.reset-password', []);
     }
 
-    // Eksekusi update password ke database
-    public function resetPassword(Request $request)
+    /**
+     * Eksekusi update password ke database
+     */
+    public function resetPassword(Request $request): RedirectResponse
     {
         if (!Session::has('otp_verified')) {
             return redirect()->route('password.request');
@@ -181,13 +207,14 @@ class AuthController extends Controller
         ]);
 
         $email = Session::get('reset_email');
-        $user = User::where('email', $email)->first();
+        
+        /** @var \App\Models\User|null $user */
+        $user = User::query()->where('email', $email)->first();
 
         if ($user) {
             $user->password = Hash::make($request->password);
             $user->save();
 
-            // Bersihkan sisa temp session reset
             Session::forget(['reset_email', 'reset_otp', 'otp_expires_at', 'otp_verified']);
 
             return redirect()->route('login')->with('success', 'Password Anda berhasil direset! Silakan login dengan password baru.');

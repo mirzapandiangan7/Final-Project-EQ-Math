@@ -6,51 +6,62 @@ use Illuminate\Http\Request;
 use App\Models\TransaksiPembayaran;
 use App\Models\MasterKelas;
 use App\Models\JadwalKelas;
-use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\SiswaRiwayatExport;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Database\Eloquent\Builder;
 
 class SiswaController extends Controller
 {
-    public function index()
+    /**
+     * Dashboard Siswa
+     */
+    public function index(): View
     {
-        $userId = Auth::id(); // Mengambil ID user yang sedang login
+        $userId = auth()->id();
 
         // Get user active classes
-        $kelasAktif = TransaksiPembayaran::with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
+        $kelasAktif = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
             ->orderBy('tanggal_bayar', 'desc')
             ->get();
 
         // Get next class
-        $kelasBerikutnya = TransaksiPembayaran::with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
+        $kelasBerikutnya = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
             ->orderBy('tanggal_bayar', 'asc')
             ->first();
 
         // Get pending payments
-        $pembayaranPending = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
+        $pembayaranPending = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'pending')
             ->orderBy('tanggal_bayar', 'desc')
             ->get();
 
         // Get transaction history
-        $riwayatTransaksi = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
+        $riwayatTransaksi = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas'])
             ->where('user_id', $userId)
             ->orderBy('tanggal_bayar', 'desc')
             ->limit(5)
             ->get();
 
         // Get available classes
-        $kelasTersedia = MasterKelas::orderBy('jenjang')
+        $kelasTersedia = MasterKelas::query()
+            ->orderBy('jenjang')
             ->orderBy('nama_kelas')
             ->get();
 
         // Get total pembayaran
-        $totalPembayaran = TransaksiPembayaran::where('user_id', $userId)
+        $totalPembayaran = TransaksiPembayaran::query()
+            ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
             ->sum('jumlah_bayar');
 
@@ -64,25 +75,33 @@ class SiswaController extends Controller
         ));
     }
 
-    public function pendaftaran()
+    /**
+     * Halaman pendaftaran kelas
+     */
+    public function pendaftaran(): View
     {
-        $allKelas = MasterKelas::withCount([
-            'jadwalKelas as jumlah_jadwal',
-            'transaksiPembayaran as jumlah_siswa' => function ($query) {
-                $query->where('status_pembayaran', 'settlement');
-            }
-        ])
-        ->orderBy('jenjang')
-        ->orderBy('nama_kelas')
-        ->get();
+        $allKelas = MasterKelas::query()
+            ->withCount([
+                'jadwalKelas as jumlah_jadwal',
+                'transaksiPembayaran as jumlah_siswa' => function (Builder $query) {
+                    $query->where('status_pembayaran', 'settlement');
+                }
+            ])
+            ->orderBy('jenjang')
+            ->orderBy('nama_kelas')
+            ->get();
 
         return view('siswa.pendaftaran', compact('allKelas'));
     }
 
-    public function riwayat()
+    /**
+     * Riwayat transaksi siswa
+     */
+    public function riwayat(): View
     {
-        $userId = Auth::id();
-        $riwayats = TransaksiPembayaran::with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
+        $userId = auth()->id();
+        $riwayats = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->orderBy('tanggal_bayar', 'desc')
             ->get();
@@ -90,15 +109,22 @@ class SiswaController extends Controller
         return view('siswa.riwayat', compact('riwayats'));
     }
 
-    public function exportRiwayat()
+    /**
+     * Export riwayat ke Excel
+     */
+    public function exportRiwayat(): BinaryFileResponse
     {
         return Excel::download(new SiswaRiwayatExport, 'riwayat-pembayaran-saya.xlsx');
     }
 
-    public function kelasSaya()
+    /**
+     * Daftar kelas yang diikuti
+     */
+    public function kelasSaya(): View
     {
-        $userId = Auth::id();
-        $kelasSaya = TransaksiPembayaran::with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
+        $userId = auth()->id();
+        $kelasSaya = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
             ->orderBy('tanggal_bayar', 'desc')
@@ -107,8 +133,11 @@ class SiswaController extends Controller
         return view('siswa.kelas_saya', compact('kelasSaya'));
     }
 
-    public function bantuan()
+    /**
+     * Halaman bantuan
+     */
+    public function bantuan(): View
     {
-        return view('siswa.bantuan');
+        return view('siswa.bantuan', []);
     }
 }

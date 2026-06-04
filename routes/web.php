@@ -82,6 +82,3 @@ Route::middleware(['auth', 'role:admin', 'autocutoff'])->prefix('admin')->name('
     Route::post('pengaturan/profile', [AdminController::class, 'updateProfile'])->name('pengaturan.profile');
     Route::post('pengaturan/password', [AdminController::class, 'updatePassword'])->name('pengaturan.password');
 });
-
-// Midtrans Webhook (Bypass CSRF di file app/Http/Middleware/VerifyCsrfToken.php atau bootstrap/app.php nantinya)
-Route::post('payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');

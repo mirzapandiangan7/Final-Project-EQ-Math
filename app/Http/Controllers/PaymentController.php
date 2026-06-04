@@ -6,20 +6,26 @@ use Illuminate\Http\Request;
 use App\Models\MasterKelas;
 use App\Models\JadwalKelas;
 use App\Models\TransaksiPembayaran;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 
 class PaymentController extends Controller
 {
-    public function checkout($kelasId = null)
+    /**
+     * Tampilkan halaman checkout
+     */
+    public function checkout($kelasId = null): View
     {
-        $userId = Auth::id();
+        $userId = auth()->id();
 
         // Mengambil tagihan yang masih pending
-        $pembayaranPending = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
+        $pembayaranPending = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'pending')
             ->orderBy('created_at', 'desc')
@@ -30,8 +36,10 @@ class PaymentController extends Controller
 
         // Jika user memilih kelas baru
         if ($kelasId) {
-            $kelasInfo = MasterKelas::findOrFail($kelasId);
-            $jadwalList = JadwalKelas::with('masterPengajar')
+            /** @var MasterKelas $kelasInfo */
+            $kelasInfo = MasterKelas::query()->findOrFail($kelasId);
+            $jadwalList = JadwalKelas::query()
+                ->with('masterPengajar')
                 ->where('kelas_id', $kelasId)
                 ->orderBy('hari')
                 ->orderBy('jam_mulai')
@@ -41,36 +49,46 @@ class PaymentController extends Controller
         return view('siswa.checkout', compact('pembayaranPending', 'kelasInfo', 'jadwalList'));
     }
 
-    public function process(Request $request)
+    /**
+     * Proses pembuatan transaksi Midtrans
+     */
+    public function process(Request $request): JsonResponse
     {
         $request->validate([
             'jadwal_id' => 'required|exists:jadwal_kelas,id'
         ]);
 
-        $userId = Auth::id();
-        $user = Auth::user();
+        $userId = auth()->id();
+        
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        
         $jadwalId = $request->jadwal_id;
 
         try {
             DB::beginTransaction();
 
-            $jadwal = JadwalKelas::with('masterKelas')->lockForUpdate()->findOrFail($jadwalId);
+            /** @var JadwalKelas $jadwal */
+            $jadwal = JadwalKelas::query()->with('masterKelas')->lockForUpdate()->findOrFail($jadwalId);
 
             // 1. Cek apakah sudah ada transaksi PENDING untuk jadwal ini (Reuse)
-            $transaksi = TransaksiPembayaran::where('user_id', $userId)
+            /** @var TransaksiPembayaran|null $transaksi */
+            $transaksi = TransaksiPembayaran::query()
+                ->where('user_id', $userId)
                 ->where('jadwal_id', $jadwalId)
                 ->where('status_pembayaran', 'pending')
                 ->first();
 
             // Jika sudah terdaftar (Lunas)
-            $isLunas = TransaksiPembayaran::where('user_id', $userId)
+            $isLunas = TransaksiPembayaran::query()
+                ->where('user_id', $userId)
                 ->where('jadwal_id', $jadwalId)
                 ->where('status_pembayaran', 'settlement')
                 ->exists();
 
             if ($isLunas) {
                 DB::rollBack();
-                return response()->json([
+                return response('', 200)->json([
                     'status' => 'error',
                     'message' => 'Anda sudah terdaftar di kelas ini.'
                 ], 422);
@@ -99,14 +117,20 @@ class PaymentController extends Controller
                     ]
                 ];
 
-                $serverKey = env('MIDTRANS_SERVER_KEY');
+                $serverKey = config('services.midtrans.server_key');
+                $isProduction = config('services.midtrans.is_production');
+                $baseUrl = $isProduction 
+                    ? 'https://app.midtrans.com/snap/v1/transactions' 
+                    : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
+
                 $response = Http::withoutVerifying()
                     ->withBasicAuth($serverKey, '')
-                    ->post('https://app.sandbox.midtrans.com/snap/v1/transactions', $params);
+                    ->post($baseUrl, $params);
 
                 if ($response->successful()) {
                     $transaksi->snap_token = $response->json('token');
                 } else {
+                    Log::error('Midtrans Snap Error: ' . $response->body());
                     throw new \Exception('Gagal mendapatkan token Midtrans');
                 }
             }
@@ -114,7 +138,7 @@ class PaymentController extends Controller
             $transaksi->save();
             DB::commit();
 
-            return response()->json([
+            return response('', 200)->json([
                 'status' => 'success',
                 'snap_token' => $transaksi->snap_token
             ]);
@@ -122,46 +146,84 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error Payment Process: ' . $e->getMessage());
-            return response()->json([
+            return response('', 200)->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan sistem, silakan coba lagi.'
             ], 500);
         }
     }
 
-    public function webhook(Request $request)
+    /**
+     * Handle Webhook dari Midtrans
+     */
+    public function handleNotification(Request $request): JsonResponse
     {
-        $serverKey = env('MIDTRANS_SERVER_KEY');
+        Log::info('Midtrans Webhook:', $request->all());
+
+        $serverKey = config('services.midtrans.server_key');
+
+        // 2. Validasi Signature Key (Keamanan)
         $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
-
-        if ($hashed == $request->signature_key) {
-            $transaksi = TransaksiPembayaran::where('order_id', $request->order_id)->first();
-
-            if ($transaksi) {
-                if ($request->transaction_status == 'capture' || $request->transaction_status == 'settlement') {
-                    $transaksi->status_pembayaran = 'settlement';
-                    $transaksi->tanggal_bayar = now();
-                } else if ($request->transaction_status == 'expire' || $request->transaction_status == 'cancel' || $request->transaction_status == 'deny') {
-                    $transaksi->status_pembayaran = 'cancel';
-                }
-                $transaksi->save();
-            }
+        if ($hashed !== $request->signature_key) {
+            Log::warning('Midtrans Webhook: Invalid Signature Key');
+            return response('', 200)->json(['message' => 'Invalid signature'], 403);
         }
 
-        return response()->json(['status' => 'success']);
+        // 3. Ambil data transaksi
+        /** @var TransaksiPembayaran|null $transaksi */
+        $transaksi = TransaksiPembayaran::query()->where('order_id', $request->order_id)->first();
+
+        if (!$transaksi) {
+            Log::error('Midtrans Webhook: Order ID not found: ' . $request->order_id);
+            return response('', 200)->json(['message' => 'Order not found'], 404);
+        }
+
+        // 4. Update Status Berdasarkan Notification
+        $transactionStatus = $request->transaction_status;
+        $type = $request->payment_type;
+        $fraudStatus = $request->fraud_status;
+
+        if ($transactionStatus == 'capture') {
+            if ($type == 'credit_card') {
+                if ($fraudStatus == 'challenge') {
+                    $transaksi->status_pembayaran = 'pending';
+                } else {
+                    $transaksi->status_pembayaran = 'settlement';
+                    $transaksi->tanggal_bayar = now();
+                }
+            }
+        } else if ($transactionStatus == 'settlement') {
+            $transaksi->status_pembayaran = 'settlement';
+            $transaksi->tanggal_bayar = now();
+        } else if ($transactionStatus == 'pending') {
+            $transaksi->status_pembayaran = 'pending';
+        } else if ($transactionStatus == 'deny') {
+            $transaksi->status_pembayaran = 'cancel';
+        } else if ($transactionStatus == 'expire') {
+            $transaksi->status_pembayaran = 'expire';
+        } else if ($transactionStatus == 'cancel') {
+            $transaksi->status_pembayaran = 'cancel';
+        }
+
+        $transaksi->save();
+
+        return response('', 200)->json(['status' => 'success']);
     }
 
-    public function cancelPayment($id)
+    /**
+     * Batalkan pembayaran oleh user
+     */
+    public function cancelPayment($id): RedirectResponse
     {
-        $userId = Auth::id();
-        
-        // Cari transaksi berdasarkan ID dan pastikan milik user yang login
-        $transaksi = TransaksiPembayaran::where('id', $id)
+        $userId = auth()->id();
+
+        /** @var TransaksiPembayaran $transaksi */
+        $transaksi = TransaksiPembayaran::query()
+            ->where('id', $id)
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'pending')
             ->firstOrFail();
 
-        // Ubah status menjadi 'cancel'
         $transaksi->status_pembayaran = 'cancel';
         $transaksi->save();
 

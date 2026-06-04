@@ -4,28 +4,42 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 
 class ActivityLogController extends Controller
 {
-    public function index()
+    /**
+     * Daftar log aktivitas
+     */
+    public function index(): View
     {
-        $logs = ActivityLog::with('causer')
+        $logs = ActivityLog::query()
+            ->with('causer')
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
         return view('admin.activity-log.index', compact('logs'));
     }
 
-    public function show($id)
+    /**
+     * Detail log aktivitas
+     */
+    public function show($id): View
     {
-        $log = ActivityLog::with('causer', 'subject')->findOrFail($id);
+        /** @var ActivityLog $log */
+        $log = ActivityLog::query()->with(['causer', 'subject'])->findOrFail($id);
 
         return view('admin.activity-log.show', compact('log'));
     }
 
-    public function destroy($id)
+    /**
+     * Hapus log aktivitas
+     */
+    public function destroy($id): RedirectResponse
     {
-        $log = ActivityLog::findOrFail($id);
+        /** @var ActivityLog $log */
+        $log = ActivityLog::query()->findOrFail($id);
         $log->delete();
 
         return redirect()->route('admin.activity-log.index')->with([

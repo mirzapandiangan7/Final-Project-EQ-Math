@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -20,27 +19,36 @@ use App\Exports\AdminJadwalExport;
 use App\Exports\AdminSiswaExport;
 use App\Exports\AdminKelasExport;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Database\Eloquent\Builder;
 
 class AdminController extends Controller
 {
-    public function dashboard()
+    /**
+     * Tampilkan Dashboard Admin
+     */
+    public function dashboard(): View
     {
-        $totalSiswa = User::where('role', 'siswa')->count();
-        $totalPengajar = MasterPengajar::count();
-        $totalKelas = MasterKelas::count();
+        $totalSiswa = User::query()->where('role', 'siswa')->count();
+        $totalPengajar = MasterPengajar::query()->count();
+        $totalKelas = MasterKelas::query()->count();
 
-        $pendapatanBulanIni = TransaksiPembayaran::where('status_pembayaran', 'settlement')
+        $pendapatanBulanIni = TransaksiPembayaran::query()
+            ->where('status_pembayaran', 'settlement')
             ->whereMonth('tanggal_bayar', now()->month)
             ->whereYear('tanggal_bayar', now()->year)
             ->sum('jumlah_bayar');
 
-        $siswaBaru = User::where('role', 'siswa')
+        $siswaBaru = User::query()
+            ->where('role', 'siswa')
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->count();
 
-        $transaksiTerbaru = TransaksiPembayaran::with(['user', 'jadwalKelas.masterKelas'])
+        $transaksiTerbaru = TransaksiPembayaran::query()
+            ->with(['user', 'jadwalKelas.masterKelas'])
             ->orderBy('tanggal_bayar', 'desc')
             ->take(5)
             ->get();
@@ -50,22 +58,20 @@ class AdminController extends Controller
         // 1. Grafik Pendapatan Bulanan (Line Chart)
         $currentYear = now()->year;
         $monthlyRevenueLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        $monthlyRevenueData = array_fill(0, 12, 0); // Initialize dengan 0
+        $monthlyRevenueData = array_fill(0, 12, 0);
 
-        // Ambil transaksi settlement di tahun berjalan
-        $monthlyTransactions = TransaksiPembayaran::where('status_pembayaran', 'settlement')
+        $monthlyTransactions = TransaksiPembayaran::query()
+            ->where('status_pembayaran', 'settlement')
             ->whereYear('tanggal_bayar', $currentYear)
             ->whereNotNull('tanggal_bayar')
             ->get();
 
-        // Group data per bulan menggunakan Collection
-        $monthlyRevenueCollection = $monthlyTransactions->groupBy(function($item) {
-            return Carbon::parse($item->tanggal_bayar)->month; // 1-12
-        })->map(function($group) {
+        $monthlyRevenueCollection = $monthlyTransactions->groupBy(function (TransaksiPembayaran $item) {
+            return Carbon::parse($item->tanggal_bayar)->month;
+        })->map(function ($group) {
             return $group->sum('jumlah_bayar');
         });
 
-        // Fill data ke array (bulan 1-12 ke index 0-11)
         foreach ($monthlyRevenueCollection as $month => $total) {
             if ($month >= 1 && $month <= 12) {
                 $monthlyRevenueData[$month - 1] = $total;
@@ -75,25 +81,23 @@ class AdminController extends Controller
         // 2. Grafik Status Pembayaran (Doughnut Chart)
         $paymentStatusLabels = ['Pending', 'Settlement', 'Cancel', 'Expire'];
         $paymentStatusData = [
-            TransaksiPembayaran::where('status_pembayaran', 'pending')->count(),
-            TransaksiPembayaran::where('status_pembayaran', 'settlement')->count(),
-            TransaksiPembayaran::where('status_pembayaran', 'cancel')->count(),
-            TransaksiPembayaran::where('status_pembayaran', 'expire')->count(),
+            TransaksiPembayaran::query()->where('status_pembayaran', 'pending')->count(),
+            TransaksiPembayaran::query()->where('status_pembayaran', 'settlement')->count(),
+            TransaksiPembayaran::query()->where('status_pembayaran', 'cancel')->count(),
+            TransaksiPembayaran::query()->where('status_pembayaran', 'expire')->count(),
         ];
 
         // 3. Grafik Pendapatan per Kelas (Bar Chart)
-        // Ambil transaksi settlement dengan relasi lengkap
-        $revenueByClassTransactions = TransaksiPembayaran::with(['jadwalKelas.masterKelas'])
+        $revenueByClassCollection = TransaksiPembayaran::query()
+            ->with(['jadwalKelas.masterKelas'])
             ->where('status_pembayaran', 'settlement')
-            ->whereHas('jadwalKelas.masterKelas') // Pastikan relasi ada
-            ->get();
-
-        // Group dan sum per nama_kelas
-        $revenueByClassCollection = $revenueByClassTransactions->groupBy(function($item) {
-            return $item->jadwalKelas->masterKelas->nama_kelas ?? 'Tidak diketahui';
-        })->map(function($group) {
-            return $group->sum('jumlah_bayar');
-        })->sortDesc()->take(10); // Top 10 kelas
+            ->whereHas('jadwalKelas.masterKelas')
+            ->get()
+            ->groupBy(function (TransaksiPembayaran $item) {
+                return $item->jadwalKelas->masterKelas->nama_kelas ?? 'Tidak diketahui';
+            })->map(function ($group) {
+                return $group->sum('jumlah_bayar');
+            })->sortDesc()->take(10);
 
         $revenueByClassLabels = $revenueByClassCollection->keys()->toArray();
         $revenueByClassData = $revenueByClassCollection->values()->toArray();
@@ -115,41 +119,53 @@ class AdminController extends Controller
     }
 
     // --- PENGAJAR ---
-    public function pengajarIndex()
+    public function pengajarIndex(): View
     {
-        $pengajar = MasterPengajar::orderBy('id', 'asc')->get();
+        $pengajar = MasterPengajar::query()->orderBy('id', 'asc')->get();
         return view('admin.pengajar', compact('pengajar'));
     }
 
-    public function pengajarStore(Request $request)
+    public function pengajarStore(Request $request): RedirectResponse
     {
-        $request->validate(['nama' => 'required|string|max:100']);
-        $pengajar = MasterPengajar::create(['nama_pengajar' => $request->nama]);
+        $validated = $request->validate(['nama' => 'required|string|max:100']);
+        
+        /** @var MasterPengajar $pengajar */
+        $pengajar = MasterPengajar::query()->create(['nama_pengajar' => $validated['nama']]);
+
         ActivityLog::log('created pengajar', $pengajar, [
             'attributes' => $pengajar->toArray(),
         ]);
 
-        return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil ditambahkan', 'message_type' => 'success']);
+        return redirect()->route('admin.pengajar.index')->with([
+            'message' => 'Pengajar berhasil ditambahkan',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function pengajarUpdate(Request $request, $id)
+    public function pengajarUpdate(Request $request, $id): RedirectResponse
     {
-        $request->validate(['nama' => 'required|string|max:100']);
-        $pengajar = MasterPengajar::findOrFail($id);
+        $validated = $request->validate(['nama' => 'required|string|max:100']);
+        
+        /** @var MasterPengajar $pengajar */
+        $pengajar = MasterPengajar::query()->findOrFail($id);
         $original = $pengajar->getOriginal();
-        $pengajar->update(['nama_pengajar' => $request->nama]);
+        $pengajar->update(['nama_pengajar' => $validated['nama']]);
 
         ActivityLog::log('updated pengajar', $pengajar, [
             'old' => $original,
             'attributes' => $pengajar->getChanges(),
         ]);
 
-        return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil diperbarui', 'message_type' => 'success']);
+        return redirect()->route('admin.pengajar.index')->with([
+            'message' => 'Pengajar berhasil diperbarui',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function pengajarDestroy($id)
+    public function pengajarDestroy($id): RedirectResponse
     {
-        $pengajar = MasterPengajar::findOrFail($id);
+        /** @var MasterPengajar $pengajar */
+        $pengajar = MasterPengajar::query()->findOrFail($id);
         $old = $pengajar->toArray();
         $pengajar->delete();
 
@@ -157,65 +173,83 @@ class AdminController extends Controller
             'old' => $old,
         ]);
 
-        return redirect()->route('admin.pengajar.index')->with(['message' => 'Pengajar berhasil dihapus', 'message_type' => 'success']);
+        return redirect()->route('admin.pengajar.index')->with([
+            'message' => 'Pengajar berhasil dihapus',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function exportPengajar()
+    public function exportPengajar(): BinaryFileResponse
     {
         return Excel::download(new AdminPengajarExport, 'daftar-pengajar-eqmath.xlsx');
     }
 
     // --- KELAS ---
-    public function kelasIndex()
+    public function kelasIndex(): View
     {
-        $kelas = MasterKelas::withCount(['jadwalKelas as jumlah_jadwal'])
-            ->withCount(['transaksiPembayaran as jumlah_siswa' => function ($query) {
+        $kelas = MasterKelas::query()
+            ->withCount(['jadwalKelas as jumlah_jadwal'])
+            ->withCount(['transaksiPembayaran as jumlah_siswa' => function (Builder $query) {
                 $query->where('status_pembayaran', 'settlement');
             }])
-            ->orderBy('jenjang')->orderBy('nama_kelas')->get();
+            ->orderBy('jenjang')
+            ->orderBy('nama_kelas')
+            ->get();
 
         return view('admin.kelas', compact('kelas'));
     }
 
-    public function kelasStore(Request $request)
+    public function kelasStore(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_kelas' => 'required|string|max:100',
             'jenjang' => 'required|in:SD,SMP,SMA',
             'harga' => 'required|numeric',
             'deskripsi' => 'required|string'
         ]);
-        $kelas = MasterKelas::create($request->all());
+
+        /** @var MasterKelas $kelas */
+        $kelas = MasterKelas::query()->create($validated);
+
         ActivityLog::log('created kelas', $kelas, [
             'attributes' => $kelas->toArray(),
         ]);
 
-        return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil ditambahkan', 'message_type' => 'success']);
+        return redirect()->route('admin.kelas.index')->with([
+            'message' => 'Kelas berhasil ditambahkan',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function kelasUpdate(Request $request, $id)
+    public function kelasUpdate(Request $request, $id): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_kelas' => 'required|string|max:100',
             'jenjang' => 'required|in:SD,SMP,SMA',
             'harga' => 'required|numeric',
             'deskripsi' => 'required|string'
         ]);
-        $kelas = MasterKelas::findOrFail($id);
+
+        /** @var MasterKelas $kelas */
+        $kelas = MasterKelas::query()->findOrFail($id);
         $original = $kelas->getOriginal();
-        $kelas->update($request->all());
+        $kelas->update($validated);
 
         ActivityLog::log('updated kelas', $kelas, [
             'old' => $original,
             'attributes' => $kelas->getChanges(),
         ]);
 
-        return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil diperbarui', 'message_type' => 'success']);
+        return redirect()->route('admin.kelas.index')->with([
+            'message' => 'Kelas berhasil diperbarui',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function kelasDestroy($id)
+    public function kelasDestroy($id): RedirectResponse
     {
-        $kelas = MasterKelas::findOrFail($id);
+        /** @var MasterKelas $kelas */
+        $kelas = MasterKelas::query()->findOrFail($id);
         $old = $kelas->toArray();
         $kelas->delete();
 
@@ -223,28 +257,33 @@ class AdminController extends Controller
             'old' => $old,
         ]);
 
-        return redirect()->route('admin.kelas.index')->with(['message' => 'Kelas berhasil dihapus', 'message_type' => 'success']);
+        return redirect()->route('admin.kelas.index')->with([
+            'message' => 'Kelas berhasil dihapus',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function exportKelas()
+    public function exportKelas(): BinaryFileResponse
     {
         return Excel::download(new AdminKelasExport, 'daftar-kelas-eqmath.xlsx');
     }
 
     // --- JADWAL ---
-    public function jadwalIndex()
+    public function jadwalIndex(): View
     {
-        $jadwal = JadwalKelas::with(['masterKelas', 'masterPengajar'])
+        $jadwal = JadwalKelas::query()
+            ->with(['masterKelas', 'masterPengajar'])
             ->orderBy('hari')->orderBy('jam_mulai')->get();
-        $kelas = MasterKelas::orderBy('jenjang')->orderBy('nama_kelas')->get();
-        $pengajar = MasterPengajar::orderBy('nama_pengajar')->get();
+            
+        $kelas = MasterKelas::query()->orderBy('jenjang')->orderBy('nama_kelas')->get();
+        $pengajar = MasterPengajar::query()->orderBy('nama_pengajar')->get();
 
         return view('admin.jadwal', compact('jadwal', 'kelas', 'pengajar'));
     }
 
-    public function jadwalStore(Request $request)
+    public function jadwalStore(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'kelas_id' => 'required|exists:master_kelas,id',
             'pengajar_id' => 'required|exists:master_pengajar,id',
             'hari' => 'required|string',
@@ -253,51 +292,40 @@ class AdminController extends Controller
         ]);
 
         try {
-            // Memulai transaksi database (Atomicity)
-            // Memastikan pembuatan jadwal hanya berhasil jika tidak ada error selama proses validasi overlap
             DB::beginTransaction();
 
-            // --------------------------------------------------------------------------
-            // VALIDASI KONFLIK JADWAL (ADMIN - STORE)
-            // --------------------------------------------------------------------------
-            // Menggunakan lockForUpdate() agar data yang sedang dibaca tidak bisa diubah transaksi lain
-            $clash = JadwalKelas::where('pengajar_id', $request->pengajar_id)
-                ->where('hari', $request->hari)
-                ->where(function ($query) use ($request) {
-                    $query->where('jam_mulai', '<', $request->jam_selesai)
-                          ->where('jam_selesai', '>', $request->jam_mulai);
+            $clash = JadwalKelas::query()
+                ->where('pengajar_id', $validated['pengajar_id'])
+                ->where('hari', $validated['hari'])
+                ->where(function (Builder $query) use ($validated) {
+                    $query->where('jam_mulai', '<', $validated['jam_selesai'])
+                        ->where('jam_selesai', '>', $validated['jam_mulai']);
                 })
                 ->lockForUpdate()
                 ->exists();
 
             if ($clash) {
-                // Batalkan transaksi jika terjadi bentrok jadwal
                 DB::rollBack();
-
                 return redirect()->back()->withErrors([
                     'jam_mulai' => 'Gagal! Pengajar ini sudah memiliki kelas lain yang beririsan di hari dan jam tersebut.'
                 ])->withInput();
             }
 
-            $jadwal = JadwalKelas::create(array_merge($request->all(), ['status' => 'upcoming']));
+            /** @var JadwalKelas $jadwal */
+            $jadwal = JadwalKelas::query()->create(array_merge($validated, ['status' => 'upcoming']));
 
             ActivityLog::log('created jadwal', $jadwal, [
                 'attributes' => $jadwal->toArray(),
             ]);
 
-            // Jika berhasil dan tidak ada error/bentrok, commit data ke database
             DB::commit();
 
             return redirect()->route('admin.jadwal.index')->with([
-                'message' => 'Jadwal berhasil ditambahkan', 
+                'message' => 'Jadwal berhasil ditambahkan',
                 'message_type' => 'success'
             ]);
-
         } catch (\Exception $e) {
-            // Rollback jika terjadi exception (misal: koneksi terputus saat menyimpan)
             DB::rollBack();
-
-            // Simpan log error asli untuk backend developer
             Log::error('Error Pembuatan Jadwal Kelas: ' . $e->getMessage());
 
             return back()->with([
@@ -307,9 +335,9 @@ class AdminController extends Controller
         }
     }
 
-    public function jadwalUpdate(Request $request, $id)
+    public function jadwalUpdate(Request $request, $id): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'kelas_id' => 'required|exists:master_kelas,id',
             'pengajar_id' => 'required|exists:master_pengajar,id',
             'hari' => 'required|string',
@@ -318,12 +346,13 @@ class AdminController extends Controller
             'status' => 'required|in:active,upcoming,completed'
         ]);
 
-        $clash = JadwalKelas::where('pengajar_id', $request->pengajar_id)
-            ->where('hari', $request->hari)
+        $clash = JadwalKelas::query()
+            ->where('pengajar_id', $validated['pengajar_id'])
+            ->where('hari', $validated['hari'])
             ->where('id', '!=', $id)
-            ->where(function ($query) use ($request) {
-                $query->where('jam_mulai', '<', $request->jam_selesai)
-                      ->where('jam_selesai', '>', $request->jam_mulai);
+            ->where(function (Builder $query) use ($validated) {
+                $query->where('jam_mulai', '<', $validated['jam_selesai'])
+                    ->where('jam_selesai', '>', $validated['jam_mulai']);
             })
             ->exists();
 
@@ -333,21 +362,26 @@ class AdminController extends Controller
             ])->withInput();
         }
 
-        $jadwal = JadwalKelas::findOrFail($id);
+        /** @var JadwalKelas $jadwal */
+        $jadwal = JadwalKelas::query()->findOrFail($id);
         $original = $jadwal->getOriginal();
-        $jadwal->update($request->all());
+        $jadwal->update($validated);
 
         ActivityLog::log('updated jadwal', $jadwal, [
             'old' => $original,
             'attributes' => $jadwal->getChanges(),
         ]);
 
-        return redirect()->route('admin.jadwal.index')->with(['message' => 'Jadwal berhasil diperbarui', 'message_type' => 'success']);
+        return redirect()->route('admin.jadwal.index')->with([
+            'message' => 'Jadwal berhasil diperbarui',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function jadwalDestroy($id)
+    public function jadwalDestroy($id): RedirectResponse
     {
-        $jadwal = JadwalKelas::findOrFail($id);
+        /** @var JadwalKelas $jadwal */
+        $jadwal = JadwalKelas::query()->findOrFail($id);
         $old = $jadwal->toArray();
         $jadwal->delete();
 
@@ -355,47 +389,58 @@ class AdminController extends Controller
             'old' => $old,
         ]);
 
-        return redirect()->route('admin.jadwal.index')->with(['message' => 'Jadwal berhasil dihapus', 'message_type' => 'success']);
+        return redirect()->route('admin.jadwal.index')->with([
+            'message' => 'Jadwal berhasil dihapus',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function exportJadwal()
+    public function exportJadwal(): BinaryFileResponse
     {
         return Excel::download(new AdminJadwalExport, 'daftar-jadwal-eqmath.xlsx');
     }
 
     // --- PEMBAYARAN ---
-    public function pembayaranIndex()
+    public function pembayaranIndex(): View
     {
-        $transaksis = TransaksiPembayaran::with(['user', 'jadwalKelas.masterKelas'])
+        $transaksis = TransaksiPembayaran::query()
+            ->with(['user', 'jadwalKelas.masterKelas'])
             ->orderBy('tanggal_bayar', 'desc')
             ->get();
 
-        $totalPendapatan = TransaksiPembayaran::where('status_pembayaran', 'settlement')
+        $totalPendapatan = TransaksiPembayaran::query()
+            ->where('status_pembayaran', 'settlement')
             ->sum('jumlah_bayar');
 
-        $pendingCount = TransaksiPembayaran::where('status_pembayaran', 'pending')->count();
-        $settlementCount = TransaksiPembayaran::where('status_pembayaran', 'settlement')->count();
+        $pendingCount = TransaksiPembayaran::query()->where('status_pembayaran', 'pending')->count();
+        $settlementCount = TransaksiPembayaran::query()->where('status_pembayaran', 'settlement')->count();
 
         return view('admin.pembayaran', compact('transaksis', 'totalPendapatan', 'pendingCount', 'settlementCount'));
     }
 
-    public function updatePembayaranStatus(Request $request, $id)
+    public function updatePembayaranStatus(Request $request, $id): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'status' => 'required|in:pending,settlement,cancel'
         ]);
 
-        $transaksi = TransaksiPembayaran::findOrFail($id);
+        /** @var TransaksiPembayaran $transaksi */
+        $transaksi = TransaksiPembayaran::query()->findOrFail($id);
         $oldStatus = $transaksi->status_pembayaran;
-        $transaksi->status_pembayaran = $request->status;
-        if ($request->status === 'settlement' && !$transaksi->tanggal_bayar) {
+        $transaksi->status_pembayaran = $validated['status'];
+
+        if ($validated['status'] === 'settlement' && !$transaksi->tanggal_bayar) {
             $transaksi->tanggal_bayar = now();
         }
+
         $transaksi->save();
 
         ActivityLog::log('updated pembayaran status', $transaksi, [
             'old' => ['status_pembayaran' => $oldStatus],
-            'attributes' => ['status_pembayaran' => $transaksi->status_pembayaran, 'tanggal_bayar' => $transaksi->tanggal_bayar],
+            'attributes' => [
+                'status_pembayaran' => $transaksi->status_pembayaran,
+                'tanggal_bayar' => $transaksi->tanggal_bayar
+            ],
         ]);
 
         return redirect()->back()->with([
@@ -404,19 +449,20 @@ class AdminController extends Controller
         ]);
     }
 
-    public function exportTransaksi()
+    public function exportTransaksi(): BinaryFileResponse
     {
         return Excel::download(new AdminTransaksiExport, 'laporan-transaksi-eqmath.xlsx');
     }
 
     // --- SISWA ---
-    public function siswaIndex()
+    public function siswaIndex(): View
     {
-        $siswa = User::where('role', 'siswa')
-            ->with(['transaksiPembayaran' => function ($query) {
+        $siswa = User::query()
+            ->where('role', 'siswa')
+            ->with(['transaksiPembayaran' => function (Builder $query) {
                 $query->with('jadwalKelas.masterKelas')
-                      ->where('status_pembayaran', 'settlement')
-                      ->orderBy('tanggal_bayar', 'desc');
+                    ->where('status_pembayaran', 'settlement')
+                    ->orderBy('tanggal_bayar', 'desc');
             }])
             ->orderBy('id', 'asc')
             ->get();
@@ -424,48 +470,56 @@ class AdminController extends Controller
         return view('admin.siswa', compact('siswa'));
     }
 
-    public function exportSiswa()
+    public function exportSiswa(): BinaryFileResponse
     {
         return Excel::download(new AdminSiswaExport, 'daftar-siswa-eqmath.xlsx');
     }
 
     // --- PENGATURAN ---
-    public function pengaturanIndex()
+    public function pengaturanIndex(): View
     {
-        return view('admin.pengaturan');
+        return view('admin.pengaturan', []);
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_lengkap' => 'required|string|max:100',
-            'email' => 'required|email|unique:users,email,' . Auth::id(),
+            'email' => 'required|email|unique:users,email,' . auth()->id(),
             'no_wa' => 'nullable|string|max:20'
         ]);
 
-        $user = User::findOrFail(Auth::id());
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
         $original = $user->only('nama_lengkap', 'email', 'no_wa');
-        $user->update($request->only('nama_lengkap', 'email', 'no_wa'));
+        $user->update($validated);
 
         ActivityLog::log('updated profile', $user, [
             'old' => $original,
-            'attributes' => $request->only('nama_lengkap', 'email', 'no_wa'),
+            'attributes' => $validated,
         ]);
 
-        return redirect()->back()->with(['message' => 'Profil berhasil diperbarui', 'message_type' => 'success']);
+        return redirect()->back()->with([
+            'message' => 'Profil berhasil diperbarui',
+            'message_type' => 'success'
+        ]);
     }
 
-    public function updatePassword(Request $request)
+    public function updatePassword(Request $request): RedirectResponse
     {
         $request->validate([
             'current_password' => 'required',
             'new_password' => 'required|min:6',
         ]);
 
-        $user = User::findOrFail(Auth::id());
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
 
         if (!Hash::check($request->current_password, $user->password)) {
-            return redirect()->back()->with(['message' => 'Password saat ini salah', 'message_type' => 'error']);
+            return redirect()->back()->with([
+                'message' => 'Password saat ini salah',
+                'message_type' => 'error'
+            ]);
         }
 
         $user->update(['password' => Hash::make($request->new_password)]);
@@ -474,6 +528,9 @@ class AdminController extends Controller
             'attributes' => ['password' => 'updated'],
         ]);
 
-        return redirect()->back()->with(['message' => 'Password berhasil diubah', 'message_type' => 'success']);
+        return redirect()->back()->with([
+            'message' => 'Password berhasil diubah',
+            'message_type' => 'success'
+        ]);
     }
 }

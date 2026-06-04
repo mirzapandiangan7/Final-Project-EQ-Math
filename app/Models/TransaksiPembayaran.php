@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
 class TransaksiPembayaran extends Model
 {
     use HasFactory;
@@ -19,6 +18,11 @@ class TransaksiPembayaran extends Model
         'jumlah_bayar',
         'snap_token',
         'status_pembayaran',
+    ];
+
+    protected $casts = [
+        'tanggal_bayar' => 'datetime',
+        'jumlah_bayar' => 'integer',
     ];
 
     public function user()
