@@ -88,7 +88,7 @@ class PaymentController extends Controller
 
             if ($isLunas) {
                 DB::rollBack();
-                return response('', 200)->json([
+                return response()->json([
                     'status' => 'error',
                     'message' => 'Anda sudah terdaftar di kelas ini.'
                 ], 422);
@@ -109,7 +109,7 @@ class PaymentController extends Controller
                 $params = [
                     'transaction_details' => [
                         'order_id' => $transaksi->order_id,
-                        'gross_amount' => $transaksi->jumlah_bayar,
+                        'gross_amount' => (int) $transaksi->jumlah_bayar,
                     ],
                     'customer_details' => [
                         'first_name' => $user->nama_lengkap ?? 'Siswa',
@@ -145,7 +145,7 @@ class PaymentController extends Controller
                 'jumlah' => $transaksi->jumlah_bayar
             ]);
 
-            return response('', 200)->json([
+            return response()->json([
                 'status' => 'success',
                 'snap_token' => $transaksi->snap_token
             ]);
@@ -153,7 +153,7 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error Payment Process: ' . $e->getMessage());
-            return response('', 200)->json([
+            return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan sistem, silakan coba lagi.'
             ], 500);
@@ -173,7 +173,7 @@ class PaymentController extends Controller
         $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
         if ($hashed !== $request->signature_key) {
             Log::warning('Midtrans Webhook: Invalid Signature Key');
-            return response('', 200)->json(['message' => 'Invalid signature'], 403);
+            return response()->json(['message' => 'Invalid signature'], 403);
         }
 
         // 3. Ambil data transaksi
@@ -182,7 +182,7 @@ class PaymentController extends Controller
 
         if (!$transaksi) {
             Log::error('Midtrans Webhook: Order ID not found: ' . $request->order_id);
-            return response('', 200)->json(['message' => 'Order not found'], 404);
+            return response()->json(['message' => 'Order not found'], 404);
         }
 
         // 4. Update Status Berdasarkan Notification
@@ -214,7 +214,7 @@ class PaymentController extends Controller
 
         $transaksi->save();
 
-        return response('', 200)->json(['status' => 'success']);
+        return response()->json(['status' => 'success']);
     }
 
     /**

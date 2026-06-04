@@ -459,7 +459,7 @@ class AdminController extends Controller
     {
         $siswa = User::query()
             ->where('role', 'siswa')
-            ->with(['transaksiPembayaran' => function (Builder $query) {
+            ->with(['transaksiPembayaran' => function ($query) { // FIX TYPE ERROR
                 $query->with('jadwalKelas.masterKelas')
                     ->where('status_pembayaran', 'settlement')
                     ->orderBy('tanggal_bayar', 'desc');
