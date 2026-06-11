@@ -400,6 +400,32 @@ class AdminController extends Controller
         return Excel::download(new AdminJadwalExport, 'daftar-jadwal-eqmath.xlsx');
     }
 
+    /**
+     * Tampilkan daftar peserta pada jadwal tertentu
+     */
+    public function jadwalPeserta($id): View
+    {
+        // Mengambil data jadwal beserta relasi kelas dan pengajarnya
+        /** @var JadwalKelas $jadwal */
+        $jadwal = JadwalKelas::query()
+            ->with(['masterKelas', 'masterPengajar'])
+            ->findOrFail($id);
+
+        // FIX BUG PESERTA: Mengambil data peserta (siswa) dengan filter ketat
+        // 1. Filter status_pembayaran hanya yang 'settlement' (Lunas/Berhasil)
+        // 2. Gunakan unique('user_id') untuk memastikan satu siswa hanya muncul satu kali meskipun punya banyak riwayat transaksi
+        $peserta = TransaksiPembayaran::query()
+            ->with('user')
+            ->where('jadwal_id', $id)
+            // FIX BUG PESERTA: Hanya ambil yang sudah lunas (Settlement)
+            ->where('status_pembayaran', 'settlement')
+            ->get()
+            // FIX BUG PESERTA: Hilangkan duplikasi jika siswa yang sama punya lebih dari satu transaksi sukses
+            ->unique('user_id');
+
+        return view('admin.jadwal_peserta', compact('jadwal', 'peserta'));
+    }
+
     // --- PEMBAYARAN ---
     public function pembayaranIndex(): View
     {

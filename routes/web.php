@@ -61,6 +61,7 @@ Route::middleware(['auth', 'role:admin', 'autocutoff'])->prefix('admin')->name('
     // Jadwal
     Route::get('jadwal', [AdminController::class, 'jadwalIndex'])->name('jadwal.index');
     Route::post('jadwal', [AdminController::class, 'jadwalStore'])->name('jadwal.store');
+    Route::get('jadwal/{id}/peserta', [AdminController::class, 'jadwalPeserta'])->name('jadwal.peserta');
     Route::post('jadwal/{id}/update', [AdminController::class, 'jadwalUpdate'])->name('jadwal.update');
     Route::get('jadwal/{id}/delete', [AdminController::class, 'jadwalDestroy'])->name('jadwal.destroy');
     Route::get('jadwal/export', [AdminController::class, 'exportJadwal'])->name('jadwal.export');

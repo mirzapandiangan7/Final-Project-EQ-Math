@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Menjadwalkan reset jadwal kelas setiap hari Senin jam 00:00
 Schedule::command('jadwal:reset-mingguan')->weeklyOn(1, '0:00');
+
+// Menjadwalkan generate tagihan bulanan otomatis setiap hari
+Schedule::command('billing:generate-monthly')->daily();

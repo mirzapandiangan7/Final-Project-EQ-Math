@@ -54,6 +54,7 @@ class PaymentController extends Controller
      */
     public function process(Request $request): JsonResponse
     {
+        // [ACID - CONSISTENCY]: Validasi input di awal memastikan data yang masuk memenuhi skema database dan aturan dasar sebelum diproses lebih lanjut.
         $request->validate([
             'jadwal_id' => 'required|exists:jadwal_kelas,id'
         ]);
@@ -66,8 +67,10 @@ class PaymentController extends Controller
         $jadwalId = $request->jadwal_id;
 
         try {
+            // [ACID - ATOMICITY]: Memulai transaksi database agar seluruh rangkaian operasi di bawah ini (save transaksi, log, dll) dianggap sebagai satu unit kerja yang tidak terpisahkan.
             DB::beginTransaction();
 
+            // [ACID - ISOLATION]: lockForUpdate() mengunci baris data jadwal agar tidak dimodifikasi oleh transaksi lain secara bersamaan, mencegah race condition saat pengecekan kuota/status.
             /** @var JadwalKelas $jadwal */
             $jadwal = JadwalKelas::query()->with('masterKelas')->lockForUpdate()->findOrFail($jadwalId);
 
@@ -79,6 +82,7 @@ class PaymentController extends Controller
                 ->where('status_pembayaran', 'pending')
                 ->first();
 
+            // [ACID - CONSISTENCY]: Logika pengecekan pendaftaran ganda menjaga integritas aturan bisnis agar data tetap valid (user tidak boleh mendaftar di kelas yang sudah lunas).
             // Jika sudah terdaftar (Lunas)
             $isLunas = TransaksiPembayaran::query()
                 ->where('user_id', $userId)
@@ -87,6 +91,7 @@ class PaymentController extends Controller
                 ->exists();
 
             if ($isLunas) {
+                // [ACID - ATOMICITY]: Membatalkan transaksi (Rollback) jika validasi bisnis tidak terpenuhi untuk menjaga database tetap pada state yang valid.
                 DB::rollBack();
                 return response()->json([
                     'status' => 'error',
@@ -135,7 +140,10 @@ class PaymentController extends Controller
                 }
             }
 
+            // [ACID - DURABILITY]: Pemanggilan save() mengirimkan instruksi penyimpanan data ke sistem database.
             $transaksi->save();
+
+            // [ACID - DURABILITY]: DB::commit() memastikan seluruh perubahan data selama transaksi ini bersifat permanen, tahan lama, dan tidak akan hilang meskipun sistem crash setelah ini.
             DB::commit();
 
             // Catat log aktivitas pendaftaran kelas
@@ -151,6 +159,7 @@ class PaymentController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            // [ACID - ATOMICITY]: Rollback menjamin jika terjadi kegagalan (Exception) di tengah proses, database akan dikembalikan ke kondisi awal (tidak ada data setengah matang).
             DB::rollBack();
             Log::error('Error Payment Process: ' . $e->getMessage());
             return response()->json([

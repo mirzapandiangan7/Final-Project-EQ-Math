@@ -21,11 +21,14 @@ class SiswaController extends Controller
     {
         $userId = auth()->id();
 
-        // Get user active classes
+        // ACCESS CONTROL: Hanya ambil kelas yang sudah lunas (settlement) 
+        // DAN masa aktifnya belum habis (maksimal 30 hari sejak tanggal bayar)
         $kelasAktif = TransaksiPembayaran::query()
             ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
+            // Menjamin akses otomatis terputus jika tidak membayar tagihan bulanan baru
+            ->where('tanggal_bayar', '>=', now()->subDays(30))
             ->orderBy('tanggal_bayar', 'desc')
             ->get();
 
@@ -34,6 +37,7 @@ class SiswaController extends Controller
             ->with(['jadwalKelas.masterKelas', 'jadwalKelas.masterPengajar'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'settlement')
+            ->where('tanggal_bayar', '>=', now()->subDays(30))
             ->orderBy('tanggal_bayar', 'asc')
             ->first();
 
@@ -42,7 +46,7 @@ class SiswaController extends Controller
             ->with(['jadwalKelas.masterKelas'])
             ->where('user_id', $userId)
             ->where('status_pembayaran', 'pending')
-            ->orderBy('tanggal_bayar', 'desc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         // Get transaction history

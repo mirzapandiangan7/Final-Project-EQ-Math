@@ -111,6 +111,9 @@
                         </td>
                         <td class="py-4 px-6">
                             <div class="flex items-center space-x-2">
+                                <a href="{{ route('admin.jadwal.peserta', $j->id) }}" class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="Lihat Peserta">
+                                    <i class="fas fa-users"></i>
+                                </a>
                                 <button onclick='editJadwal(@json($j))' class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
